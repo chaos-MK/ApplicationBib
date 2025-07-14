@@ -1,6 +1,8 @@
 package com.bib.app.controller;
 
 import com.bib.app.service.ICohortService;
+import com.bib.app.resolver.CohortResolver;
+import com.bib.app.dto.CohortDTO;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,8 +18,11 @@ import java.util.List;
 @RequestMapping("/cohort")
 public class CohortController {
 
-	@Autowired
+    @Autowired
     private ICohortService cohortService;
+
+    @Autowired
+    private CohortResolver cohortResolver;
 
     @PostMapping("/addCohort")
     public Cohort add(@RequestBody Cohort cohort){
@@ -41,9 +46,10 @@ public class CohortController {
     }
 
     @GetMapping("/searchByProject")
-    public ResponseEntity<List<Cohort>> getCohortsByProject(@RequestParam Long projectId) {
+    public ResponseEntity<List<CohortDTO>> getCohortsByProject(@RequestParam Long projectId) {
         List<Cohort> cohorts = cohortService.searchByProject(projectId);
-        return ResponseEntity.ok(cohorts);
+        List<CohortDTO> cohortDTOs = cohortResolver.toCohortDTOList(cohorts);
+        return ResponseEntity.ok(cohortDTOs);
     }
 
     @GetMapping
@@ -58,8 +64,9 @@ public class CohortController {
     }
 
     @GetMapping("/getOne")
-    public ResponseEntity<Cohort> getOneCohort(@RequestParam Long id) {
+    public ResponseEntity<CohortDTO> getOneCohort(@RequestParam Long id) {
         Cohort cohort = cohortService.getOneCohort(id);
-        return ResponseEntity.ok(cohort);
+        CohortDTO cohortDTO = cohortResolver.toCohortDTO(cohort);
+        return ResponseEntity.ok(cohortDTO);
     }
 }
