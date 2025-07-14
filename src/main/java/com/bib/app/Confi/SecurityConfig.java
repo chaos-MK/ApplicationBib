@@ -63,35 +63,33 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/login", "/User/**","/Session/**","/events/**", "/cohort/**", "/project/**", "/company/**").permitAll()
                 .requestMatchers(
-                	    "/swagger-ui/**",
-                	    "/v3/api-docs/**",
-                	    "/swagger-ui.html",
-                	    "/swagger-resources/**",
-                	    "/webjars/**"
-                	).permitAll() // http://localhost:8080/swagger-ui/index.html
-                .requestMatchers(
-                    "/api/admin/**"
-                ).hasRole("ADMIN")
+                    "/swagger-ui/**",
+                    "/v3/api-docs/**",
+                    "/swagger-ui.html",
+                    "/swagger-resources/**",
+                    "/webjars/**"
+                ).permitAll()
+                // All other requests require authentication
                 .anyRequest().authenticated()
             )
             .formLogin(login -> login
-            	    .loginProcessingUrl("/login")
-            	    .successHandler((request, response, authentication) -> {
-            	        response.setStatus(HttpStatus.OK.value());
-            	        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            	        
-            	        // Clear response buffer first
-            	        response.resetBuffer();
-            	        
-            	        // Write single JSON response
-            	        response.getWriter().print("{\"status\":\"Login successful\"}");
-            	        response.flushBuffer();
-            	    })
-            	    .failureHandler((request, response, exception) -> {
-            	        response.setStatus(HttpStatus.UNAUTHORIZED.value());
-            	        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            	        response.getWriter().write("{\"error\":\"Invalid credentials\"}");
-            	    }))
+                .loginProcessingUrl("/login")
+                .successHandler((request, response, authentication) -> {
+                    response.setStatus(HttpStatus.OK.value());
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    
+                    // Clear response buffer first
+                    response.resetBuffer();
+                    
+                    // Write single JSON response
+                    response.getWriter().print("{\"status\":\"Login successful\"}");
+                    response.flushBuffer();
+                })
+                .failureHandler((request, response, exception) -> {
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    response.getWriter().write("{\"error\":\"Invalid credentials\"}");
+                }))
             .logout(logout -> logout
                 .logoutUrl("/logout")
                 .deleteCookies("JSESSIONID")
@@ -100,7 +98,7 @@ public class SecurityConfig {
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(HttpStatus.UNAUTHORIZED.value());
                     response.setContentType("application/json");
-                    response.getWriter().write("{\"error\":\"Unauthorized\"}");
+                    response.getWriter().write("{\"error\":\"Unauthorized - " + request.getRequestURI() + "\"}");
                 })
                 .accessDeniedHandler((request, response, accessDeniedException) -> {
                     response.setStatus(HttpStatus.FORBIDDEN.value());
@@ -109,22 +107,6 @@ public class SecurityConfig {
                 }));
 
         return http.build();
-    }
-
-    private AuthenticationSuccessHandler authenticationSuccessHandler() {
-        return (request, response, authentication) -> {
-            response.setStatus(HttpStatus.OK.value());
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.getWriter().write("{\"message\":\"Authentication successful\", \"redirectUrl\":\"/\"}");
-        };
-    }
-
-    private AuthenticationFailureHandler authenticationFailureHandler() {
-        return (request, response, exception) -> {
-            response.setStatus(HttpStatus.UNAUTHORIZED.value());
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.getWriter().write("{\"error\":\"Authentication failed\", \"message\":\"" + exception.getMessage() + "\"}");
-        };
     }
 
     @Bean
