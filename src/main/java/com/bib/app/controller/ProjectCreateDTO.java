@@ -1,25 +1,31 @@
 package com.bib.app.dto;
 
-public class ProjectDTO {
-    private String projectId;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+public class ProjectCreateDTO {
+    @NotBlank(message = "Project name is required")
     private String projectName;
+
     private String projectWebsite;
-    private String startDate; // Changed to String
-    private String endDate;  // Changed to String
+
+    @NotBlank(message = "Start date is required")
+    private String startDate;
+
+    private String endDate;
+
     private String duration;
+
+    @NotBlank(message = "Overall status is required")
     private String overallStatus;
+
     private boolean hasGraphs;
     private boolean hasDashboard;
-    private Long companyId;
-    private String companyName;
-    private int userCount;
-    private int sessionCount;
-    private int cohortCount;
+
+    @NotNull(message = "Company is required")
+    private CompanyIdDTO company;
 
     // Getters and Setters
-    public String getProjectId() { return projectId; }
-    public void setProjectId(String projectId) { this.projectId = projectId; }
-
     public String getProjectName() { return projectName; }
     public void setProjectName(String projectName) { this.projectName = projectName; }
 
@@ -44,18 +50,6 @@ public class ProjectDTO {
     public boolean isHasDashboard() { return hasDashboard; }
     public void setHasDashboard(boolean hasDashboard) { this.hasDashboard = hasDashboard; }
 
-    public Long getCompanyId() { return companyId; }
-    public void setCompanyId(Long companyId) { this.companyId = companyId; }
-
-    public String getCompanyName() { return companyName; }
-    public void setCompanyName(String companyName) { this.companyName = companyName; }
-
-    public int getUserCount() { return userCount; }
-    public void setUserCount(int userCount) { this.userCount = userCount; }
-
-    public int getSessionCount() { return sessionCount; }
-    public void setSessionCount(int sessionCount) { this.sessionCount = sessionCount; }
-
-    public int getCohortCount() { return cohortCount; }
-    public void setCohortCount(int cohortCount) { this.cohortCount = cohortCount; }
+    public CompanyIdDTO getCompany() { return company; }
+    public void setCompany(CompanyIdDTO company) { this.company = company; }
 }

@@ -1,5 +1,6 @@
 package com.bib.app.service;
 
+
 import com.bib.app.entities.User;
 import com.bib.app.entities.Cohort;
 import com.bib.app.repository.UserRepository;
@@ -135,3 +136,4 @@ public class UserService {
         return userRepository.save(user);
     }
 }
+
