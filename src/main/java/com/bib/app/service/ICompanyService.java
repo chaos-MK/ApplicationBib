@@ -6,8 +6,8 @@ import java.util.List;
 
 public interface ICompanyService {
     Company add(Company company);
-    Company deleteOne(Long id);
-    void deleteAllCompanies();
-    Company getOneCompany(Long id);
-    List<Company> getAllCompanies();
+    Company Delete(Long CompanyID);
+    void deleteAllCompany();
+    Company getOneCompany (Long CompanyID) ;
+    List<Company> getAllCompany() ;
 }

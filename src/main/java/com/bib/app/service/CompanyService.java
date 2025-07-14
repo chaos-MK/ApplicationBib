@@ -15,6 +15,10 @@ import java.util.List;
 public class CompanyService implements ICompanyService{
     private final CompanyRepository companyRepository;
     
+    public CompanyService(CompanyRepository companyRepository) {
+    	this.companyRepository = companyRepository;
+    }
+    
 
     @Override
     public Company add(Company company) {
@@ -22,7 +26,7 @@ public class CompanyService implements ICompanyService{
     }
 
     @Override
-    public Company deleteOne(Long CompanyID) {
+    public Company Delete(Long CompanyID) {
         Company company = companyRepository.findById(CompanyID)
                 .orElseThrow(() -> new RuntimeException("Cohort not found with ID: " + CompanyID));
 
@@ -31,7 +35,7 @@ public class CompanyService implements ICompanyService{
     }
 
     @Override
-    public void deleteAllCompanies() {
+    public void deleteAllCompany() {
         companyRepository.deleteAll();
     }
 
@@ -42,7 +46,7 @@ public class CompanyService implements ICompanyService{
     }
 
     @Override
-    public List<Company> getAllCompanies() {
+    public List<Company> getAllCompany() {
         return (List<Company>) companyRepository.findAll();
     }
 }

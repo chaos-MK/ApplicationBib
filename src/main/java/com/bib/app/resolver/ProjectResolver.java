@@ -1,8 +1,13 @@
 package com.bib.app.resolver;
 
-import com.bib.app.dto.ProjectCreateDTO;
 import com.bib.app.dto.ProjectDTO;
 import com.bib.app.entities.Project;
+import com.bib.app.repository.ProjectRepository;
+
+import lombok.RequiredArgsConstructor;
+import com.bib.app.repository.ProjectRepository;
+import lombok.RequiredArgsConstructor;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -11,57 +16,109 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
+@RequiredArgsConstructor
 public class ProjectResolver {
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    public Project convertToEntity(ProjectCreateDTO dto) {
-        Project project = new Project();
-        project.setProjectName(dto.getProjectName());
-        project.setProjectWebsite(dto.getProjectWebsite());
-        project.setStartDate(dto.getStartDate() != null ? LocalDate.parse(dto.getStartDate(), DATE_FORMATTER) : null);
-        project.setEndDate(dto.getEndDate() != null ? LocalDate.parse(dto.getEndDate(), DATE_FORMATTER) : null);
-        project.setDuration(dto.getDuration());
-        project.setOverallStatus(dto.getOverallStatus());
-        project.setHasGraphs(dto.isHasGraphs());
-        project.setHasDashboard(dto.isHasDashboard());
-        return project;
+private final ProjectRepository projectRepository;
+    
+    public ProjectResolver(ProjectRepository projectRepository) {
+    	this.projectRepository = projectRepository;
     }
-
-    public Project convertToEntity(ProjectDTO dto) {
-        Project project = new Project();
-        project.setProjectId(Long.parseLong(dto.getProjectId()));
-        project.setProjectName(dto.getProjectName());
-        project.setProjectWebsite(dto.getProjectWebsite());
-        project.setStartDate(dto.getStartDate() != null ? LocalDate.parse(dto.getStartDate(), DATE_FORMATTER) : null);
-        project.setEndDate(dto.getEndDate() != null ? LocalDate.parse(dto.getEndDate(), DATE_FORMATTER) : null);
-        project.setDuration(dto.getDuration());
-        project.setOverallStatus(dto.getOverallStatus());
-        project.setHasGraphs(dto.isHasGraphs());
-        project.setHasDashboard(dto.isHasDashboard());
-        return project;
-    }
-
+    
     public ProjectDTO convertToDTO(Project project) {
-        ProjectDTO dto = new ProjectDTO();
-        dto.setProjectId(String.valueOf(project.getProjectId()));
-        dto.setProjectName(project.getProjectName());
-        dto.setProjectWebsite(project.getProjectWebsite());
-        dto.setStartDate(project.getStartDate() != null ? project.getStartDate().format(DATE_FORMATTER) : null);
-        dto.setEndDate(project.getEndDate() != null ? project.getEndDate().format(DATE_FORMATTER) : null);
-        dto.setDuration(project.getDuration());
-        dto.setOverallStatus(project.getOverallStatus());
-        dto.setHasGraphs(project.isHasGraphs());
-        dto.setHasDashboard(project.getHasDashboard() != null && project.getHasDashboard());
-        dto.setCompanyId(project.getCompany() != null ? project.getCompany().getCompanyId() : null);
-        dto.setCompanyName(project.getCompany() != null ? project.getCompany().getCompanyName() : null);
-        dto.setCohortCount(project.getCohorts() != null ? project.getCohorts().size() : 0);
-        // Set userCount and sessionCount as needed (e.g., from service or related entities)
-        dto.setUserCount(0); // Placeholder, update based on actual data
-        dto.setSessionCount(0); // Placeholder, update based on actual data
-        return dto;
+        if (project == null) {
+            return null;
+        }
+        
+        // Get counts using separate queries
+        Long userCount = projectRepository.countUsersByProjectId(project.getProjectId());
+        Long sessionCount = projectRepository.countSessionsByProjectId(project.getProjectId());
+        Long cohortCount = projectRepository.countCohortsByProjectId(project.getProjectId());
+        
+        return new ProjectDTO(
+            project.getProjectId(),
+            project.getProjectName(),
+            project.getProjectWebsite(),
+            project.getStartDate(),
+            project.getEndDate(),
+            project.getDuration(),
+            project.getOverallStatus(),
+            project.getHasGraphs(),
+            project.getHasDashboard(),
+            project.getCompany() != null ? project.getCompany().getCompanyId() : null,
+            project.getCompany() != null ? project.getCompany().getCompanyName() : null,
+            userCount != null ? userCount : 0L,
+            sessionCount != null ? sessionCount : 0L,
+            cohortCount != null ? cohortCount : 0L
+        );
     }
-
+    
     public List<ProjectDTO> convertToDTO(List<Project> projects) {
-        return projects.stream().map(this::convertToDTO).collect(Collectors.toList());
+        if (projects == null || projects.isEmpty()) {
+            return List.of();
+        }
+        
+        // Extract project IDs for batch queries
+        List<Long> projectIds = projects.stream()
+                .map(Project::getProjectId)
+                .collect(Collectors.toList());
+        
+        // Get all user counts in one query
+        Map<Long, Long> userCounts = projectRepository.countUsersByProjectIds(projectIds)
+                .stream()
+                .collect(Collectors.toMap(
+                    row -> (Long) row[0],
+                    row -> (Long) row[1]
+                ));
+        
+        // Get all session counts in one query
+        Map<Long, Long> sessionCounts = projectRepository.countSessionsByProjectIds(projectIds)
+                .stream()
+                .collect(Collectors.toMap(
+                    row -> (Long) row[0],
+                    row -> (Long) row[1]
+                ));
+        
+        // Get all cohort counts in one query
+        Map<Long, Long> cohortCounts = projectRepository.countCohortsByProjectIds(projectIds)
+                .stream()
+                .collect(Collectors.toMap(
+                    row -> (Long) row[0],
+                    row -> (Long) row[1]
+                ));
+        
+        // Convert to DTOs using the batch-fetched counts
+        return projects.stream()
+                .map(project -> new ProjectDTO(
+                    project.getProjectId(),
+                    project.getProjectName(),
+                    project.getProjectWebsite(),
+                    project.getStartDate(),
+                    project.getEndDate(),
+                    project.getDuration(),
+                    project.getOverallStatus(),
+                    project.getHasGraphs(),
+                    project.getHasDashboard(),
+                    project.getCompany() != null ? project.getCompany().getCompanyId() : null,
+                    project.getCompany() != null ? project.getCompany().getCompanyName() : null,
+                    userCounts.getOrDefault(project.getProjectId(), 0L),
+                    sessionCounts.getOrDefault(project.getProjectId(), 0L),
+                    cohortCounts.getOrDefault(project.getProjectId(), 0L)
+                ))
+                .collect(Collectors.toList());
+    }
+    public Project convertToEntity(ProjectDTO dto) {
+    	if (dto == null) {
+            return null;
+        }
+        Project project = new Project();
+        project.setProjectId(dto.getProjectId());
+        project.setProjectName(dto.getProjectName());
+        project.setProjectWebsite(dto.getProjectWebsite());
+        project.setDuration(dto.getDuration());
+        project.setOverallStatus(dto.getOverallStatus());
+        project.setHasGraphs(dto.getHasGraphs());
+        project.setHasDashboard(dto.getHasDashboard());
+        return project;
     }
 }

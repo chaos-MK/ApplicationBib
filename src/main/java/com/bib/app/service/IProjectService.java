@@ -8,7 +8,7 @@ import java.util.List;
 public interface IProjectService {
     Project add(Project project);
     Project updateProject(Project project);
-    Project deleteOne(Long id);
+    Project Deleteone(Long projectId);
     void deleteAllProjects();
     ProjectDTO getOneProject(Long id);
     List<ProjectDTO> getAllProject();

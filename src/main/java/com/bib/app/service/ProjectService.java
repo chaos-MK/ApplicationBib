@@ -20,8 +20,12 @@ import java.util.Optional;
 public class ProjectService implements  IProjectService{
     private final ProjectRepository projectRepository;
     private final ProjectResolver projectResolver;
-    private final CompanyRepository companyRepository;
 
+    
+    public ProjectService(ProjectRepository projectRepository, ProjectResolver projectResolver) {
+    	this.projectRepository = projectRepository;
+    	this.projectResolver = projectResolver;
+    }
 
 
 
@@ -53,7 +57,7 @@ public class ProjectService implements  IProjectService{
     }
 
     @Override
-    public Project deleteOne(Long projectId) {
+    public Project Deleteone(Long projectId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Cohort not found with ID: " + projectId));
 
@@ -65,7 +69,7 @@ public class ProjectService implements  IProjectService{
 
     @Override
     public Project add(Project project) {
-        return  this.projectRepository.save(project);
+    	return  this.projectRepository.save(project);
     }
 
 
