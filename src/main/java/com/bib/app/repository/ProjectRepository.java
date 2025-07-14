@@ -67,4 +67,8 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
            "WHERE p.projectId IN :projectIds " +
            "GROUP BY p.projectId")
     List<Object[]> countCohortsByProjectIds(@Param("projectIds") List<Long> projectIds);
+
+    @Query("SELECT p FROM Project p WHERE p.company.companyId = :companyId")
+    List<Project> findProjectsByCompanyId(@Param("companyId") Long companyId);
+
 }

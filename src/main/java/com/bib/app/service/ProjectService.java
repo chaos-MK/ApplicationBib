@@ -2,14 +2,17 @@ package com.bib.app.service;
 
 import com.bib.app.dto.ProjectDTO;
 import com.bib.app.entities.Project;
+import com.bib.app.repository.CompanyRepository;
 import com.bib.app.repository.ProjectRepository;
 import com.bib.app.resolver.ProjectResolver;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -17,25 +20,55 @@ import java.util.List;
 public class ProjectService implements  IProjectService{
     private final ProjectRepository projectRepository;
     private final ProjectResolver projectResolver;
-    
-    public ProjectService(ProjectRepository projectRepository, ProjectResolver projectResolver) {
-    	this.projectRepository = projectRepository;
-    	this.projectResolver = projectResolver;
+    private final CompanyRepository companyRepository;
+
+
+
+
+    @Override
+    public Project updateProject(Project project) {
+        Optional<Project> existingOpt = projectRepository.findById(project.getProjectId());
+
+        if (existingOpt.isPresent()) {
+            Project existing = existingOpt.get();
+
+            existing.setProjectName(project.getProjectName());
+            existing.setProjectWebsite(project.getProjectWebsite());
+            existing.setStartDate(project.getStartDate());
+            existing.setEndDate(project.getEndDate());
+            existing.setDuration(project.getDuration());
+            existing.setOverallStatus(project.getOverallStatus());
+            existing.setHasGraphs(project.getHasGraphs());
+            existing.setHasDashboard(project.getHasDashboard());
+
+            // Optionnel : mettre à jour la company si nécessaire
+            if (project.getCompany() != null) {
+                existing.setCompany(project.getCompany());
+            }
+
+            return projectRepository.save(existing);
+        } else {
+            throw new EntityNotFoundException("Project with ID " + project.getProjectId() + " not found.");
+        }
     }
 
     @Override
-    public Project add(Project project) {
-        return  this.projectRepository.save(project);
-    }
-
-    @Override
-    public Project Deleteone(Long projectId) {
+    public Project deleteOne(Long projectId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Cohort not found with ID: " + projectId));
 
         projectRepository.deleteById(projectId);
         return project;
     }
+
+
+
+    @Override
+    public Project add(Project project) {
+        return  this.projectRepository.save(project);
+    }
+
+
 
     @Override
     public void deleteAllProjects() {
@@ -62,6 +95,11 @@ public class ProjectService implements  IProjectService{
         
         // Resolver will handle batch count queries
         return projectResolver.convertToDTO(projects);
+    }
+
+    @Override
+    public List<Project> getProjectsByCompanyId(Long companyId) {
+        return projectRepository.findProjectsByCompanyId(companyId);
     }
 
    /* @Override
