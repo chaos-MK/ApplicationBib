@@ -42,7 +42,7 @@ public class UserService {
     }
     
     // Get all users
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true) 
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
