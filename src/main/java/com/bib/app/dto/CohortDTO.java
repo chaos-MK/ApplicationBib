@@ -21,6 +21,9 @@ public class CohortDTO {
     private Long project_id; // Changed from projectId to match frontend
     private List<UserDTO> users;
     private List<StageDTO> stages;
+    
+    // New statistics fields
+    private StatisticsDTO statistics;
 
     // Getters and Setters
     public Long getId() { return id; }
@@ -59,6 +62,127 @@ public class CohortDTO {
     public List<StageDTO> getStages() { return stages; }
     public void setStages(List<StageDTO> stages) { this.stages = stages; }
 
+    public StatisticsDTO getStatistics() { return statistics; }
+    public void setStatistics(StatisticsDTO statistics) { this.statistics = statistics; }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class StatisticsDTO {
+        private Long totalUsers;
+        private Long activeUsers;
+        private Long totalSessions;
+        private Long totalStages;
+        private Long inactiveUsers;
+        private Double activeUserPercentage;
+        private List<SessionSummaryDTO> sessionSummaries;
+        private List<StageSummaryDTO> stageSummaries;
+
+        public Long getTotalUsers() { return totalUsers; }
+        public void setTotalUsers(Long totalUsers) { this.totalUsers = totalUsers; }
+
+        public Long getActiveUsers() { return activeUsers; }
+        public void setActiveUsers(Long activeUsers) { this.activeUsers = activeUsers; }
+
+        public Long getTotalSessions() { return totalSessions; }
+        public void setTotalSessions(Long totalSessions) { this.totalSessions = totalSessions; }
+
+        public Long getTotalStages() { return totalStages; }
+        public void setTotalStages(Long totalStages) { this.totalStages = totalStages; }
+
+        public Long getInactiveUsers() { return inactiveUsers; }
+        public void setInactiveUsers(Long inactiveUsers) { this.inactiveUsers = inactiveUsers; }
+
+        public Double getActiveUserPercentage() { return activeUserPercentage; }
+        public void setActiveUserPercentage(Double activeUserPercentage) { this.activeUserPercentage = activeUserPercentage; }
+
+        public List<SessionSummaryDTO> getSessionSummaries() { return sessionSummaries; }
+        public void setSessionSummaries(List<SessionSummaryDTO> sessionSummaries) { this.sessionSummaries = sessionSummaries; }
+
+        public List<StageSummaryDTO> getStageSummaries() { return stageSummaries; }
+        public void setStageSummaries(List<StageSummaryDTO> stageSummaries) { this.stageSummaries = stageSummaries; }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SessionSummaryDTO {
+        private Long sessionId;
+        private String sessionName;
+        private String status;
+        private String userName;
+        private Long stageCount;
+        private Boolean hasGraphs;
+        private Boolean hasDashboard;
+
+        public Long getSessionId() { return sessionId; }
+        public void setSessionId(Long sessionId) { this.sessionId = sessionId; }
+
+        public String getSessionName() { return sessionName; }
+        public void setSessionName(String sessionName) { this.sessionName = sessionName; }
+
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
+
+        public String getUserName() { return userName; }
+        public void setUserName(String userName) { this.userName = userName; }
+
+        public Long getStageCount() { return stageCount; }
+        public void setStageCount(Long stageCount) { this.stageCount = stageCount; }
+
+        public Boolean getHasGraphs() { return hasGraphs; }
+        public void setHasGraphs(Boolean hasGraphs) { this.hasGraphs = hasGraphs; }
+
+        public Boolean getHasDashboard() { return hasDashboard; }
+        public void setHasDashboard(Boolean hasDashboard) { this.hasDashboard = hasDashboard; }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class StageSummaryDTO {
+        private Long stageId;
+        private String stageName;
+        private String status;
+        private Integer currentUsers;
+        private Integer enteringUsers;
+        private Integer exitingUsers;
+        private String currentPct;
+        private String exitingPct;
+        private String associatedWith; // "USER", "SESSION", "COHORT", "PROJECT"
+        private Long associatedId;
+
+        public Long getStageId() { return stageId; }
+        public void setStageId(Long stageId) { this.stageId = stageId; }
+
+        public String getStageName() { return stageName; }
+        public void setStageName(String stageName) { this.stageName = stageName; }
+
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
+
+        public Integer getCurrentUsers() { return currentUsers; }
+        public void setCurrentUsers(Integer currentUsers) { this.currentUsers = currentUsers; }
+
+        public Integer getEnteringUsers() { return enteringUsers; }
+        public void setEnteringUsers(Integer enteringUsers) { this.enteringUsers = enteringUsers; }
+
+        public Integer getExitingUsers() { return exitingUsers; }
+        public void setExitingUsers(Integer exitingUsers) { this.exitingUsers = exitingUsers; }
+
+        public String getCurrentPct() { return currentPct; }
+        public void setCurrentPct(String currentPct) { this.currentPct = currentPct; }
+
+        public String getExitingPct() { return exitingPct; }
+        public void setExitingPct(String exitingPct) { this.exitingPct = exitingPct; }
+
+        public String getAssociatedWith() { return associatedWith; }
+        public void setAssociatedWith(String associatedWith) { this.associatedWith = associatedWith; }
+
+        public Long getAssociatedId() { return associatedId; }
+        public void setAssociatedId(Long associatedId) { this.associatedId = associatedId; }
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -68,50 +192,64 @@ public class CohortDTO {
         private String email;
         private String fullName;
         private String creationTime;
-        private List<String> statuses; // Changed from status to statuses array
-        private List<PrivilegeDTO> privileges;
+        private List<String> statuses;
+        private List<String> privileges;
         private String reactivationToken;
-        private Boolean disabled;
+        private boolean disabled;
         private String displayName;
-        private Boolean superUser;
+        private boolean superUser;
         private UserContextDTO userContext;
-
-        // Getters and Setters
+        
+        // Add these new fields for session and stage counts
+        private Long sessionCount;
+        private Long stageCount;
+        
+        // Constructors
+        public UserDTO() {}
+        
+        // Getters and Setters for all fields including the new ones
         public Long getId() { return id; }
         public void setId(Long id) { this.id = id; }
-
+        
         public String getApUid() { return apUid; }
         public void setApUid(String apUid) { this.apUid = apUid; }
-
+        
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
-
+        
         public String getFullName() { return fullName; }
         public void setFullName(String fullName) { this.fullName = fullName; }
-
+        
         public String getCreationTime() { return creationTime; }
         public void setCreationTime(String creationTime) { this.creationTime = creationTime; }
-
+        
         public List<String> getStatuses() { return statuses; }
         public void setStatuses(List<String> statuses) { this.statuses = statuses; }
-
-        public List<PrivilegeDTO> getPrivileges() { return privileges; }
-        public void setPrivileges(List<PrivilegeDTO> privileges) { this.privileges = privileges; }
-
+        
+        public List<String> getPrivileges() { return privileges; }
+        public void setPrivileges(List<String> privileges) { this.privileges = privileges; }
+        
         public String getReactivationToken() { return reactivationToken; }
         public void setReactivationToken(String reactivationToken) { this.reactivationToken = reactivationToken; }
-
-        public Boolean getDisabled() { return disabled; }
-        public void setDisabled(Boolean disabled) { this.disabled = disabled; }
-
+        
+        public boolean isDisabled() { return disabled; }
+        public void setDisabled(boolean disabled) { this.disabled = disabled; }
+        
         public String getDisplayName() { return displayName; }
         public void setDisplayName(String displayName) { this.displayName = displayName; }
-
-        public Boolean getSuperUser() { return superUser; }
-        public void setSuperUser(Boolean superUser) { this.superUser = superUser; }
-
+        
+        public boolean isSuperUser() { return superUser; }
+        public void setSuperUser(boolean superUser) { this.superUser = superUser; }
+        
         public UserContextDTO getUserContext() { return userContext; }
         public void setUserContext(UserContextDTO userContext) { this.userContext = userContext; }
+        
+        // New getters and setters for session and stage counts
+        public Long getSessionCount() { return sessionCount; }
+        public void setSessionCount(Long sessionCount) { this.sessionCount = sessionCount; }
+        
+        public Long getStageCount() { return stageCount; }
+        public void setStageCount(Long stageCount) { this.stageCount = stageCount; }
     }
 
     @Data

@@ -36,23 +36,36 @@ public class CohortResolver {
             dto.setProject_id(cohort.getProject().getProjectId());
         }
 
-        // Convert users
-        if (cohort.getUsers() != null) {
-            dto.setUsers(cohort.getUsers().stream()
-                .map(this::toUserDTO)
-                .collect(Collectors.toList()));
-        } else {
+        // Convert users - with null checks and lazy loading handling
+        try {
+            if (cohort.getUsers() != null && !cohort.getUsers().isEmpty()) {
+                dto.setUsers(cohort.getUsers().stream()
+                    .map(this::toUserDTO)
+                    .collect(Collectors.toList()));
+            } else {
+                dto.setUsers(Collections.emptyList());
+            }
+        } catch (Exception e) {
+            // Handle lazy loading exceptions
             dto.setUsers(Collections.emptyList());
         }
 
-        // Convert stages
-        if (cohort.getStages() != null) {
-            dto.setStages(cohort.getStages().stream()
-                .map(this::toStageDTO)
-                .collect(Collectors.toList()));
-        } else {
+        // Convert stages - with null checks and lazy loading handling
+        try {
+            if (cohort.getStages() != null && !cohort.getStages().isEmpty()) {
+                dto.setStages(cohort.getStages().stream()
+                    .map(this::toStageDTO)
+                    .collect(Collectors.toList()));
+            } else {
+                dto.setStages(Collections.emptyList());
+            }
+        } catch (Exception e) {
+            // Handle lazy loading exceptions
             dto.setStages(Collections.emptyList());
         }
+
+        // Calculate and set statistics
+        dto.setStatistics(calculateStatistics(cohort));
 
         return dto;
     }
@@ -106,6 +119,16 @@ public class CohortResolver {
         dto.setDisplayName(user.getUserName());
         dto.setSuperUser(false); // Set based on user role or add to entity
         
+        // Calculate session count and stage count
+        try {
+            dto.setSessionCount(user.getSessions() != null ? (long) user.getSessions().size() : 0L);
+        } catch (Exception e) {
+            dto.setSessionCount(0L);
+        }
+        
+        // For stage count, you might need to calculate based on your business logic
+        dto.setStageCount(0L); // Set this based on your requirements
+        
         // Create default user context
         CohortDTO.UserContextDTO userContext = new CohortDTO.UserContextDTO();
         userContext.setHasLiked(false);
@@ -132,7 +155,7 @@ public class CohortResolver {
         // Create stage stats
         CohortDTO.StageStatsDTO stageStats = new CohortDTO.StageStatsDTO();
         stageStats.setId(stage.getStageId());
-        stageStats.setCohortID(0L); // Set from stage entity if available
+        stageStats.setCohortID(stage.getCohort() != null ? stage.getCohort().getCohortId() : 0L);
         stageStats.setPeopleEntered(stage.getEntering() != null ? stage.getEntering() : 0);
         stageStats.setPeopleInactive(stage.getCurrent() != null ? stage.getCurrent() : 0);
         stageStats.setPeopleExit(stage.getExiting() != null ? stage.getExiting() : 0);
@@ -141,5 +164,57 @@ public class CohortResolver {
         dto.setStageStats(stageStats);
 
         return dto;
+    }
+
+    private CohortDTO.StatisticsDTO calculateStatistics(Cohort cohort) {
+        CohortDTO.StatisticsDTO stats = new CohortDTO.StatisticsDTO();
+        
+        try {
+            // Calculate basic statistics
+            long totalUsers = cohort.getUsers() != null ? cohort.getUsers().size() : 0;
+            long totalStages = cohort.getStages() != null ? cohort.getStages().size() : 0;
+            
+            // Calculate active users (you might need to adjust this based on your business logic)
+            long activeUsers = cohort.getUsers() != null ? 
+                cohort.getUsers().stream()
+                    .filter(user -> "ACTIVE".equalsIgnoreCase(user.getStatus()))
+                    .count() : 0;
+            
+            // Calculate total sessions
+            long totalSessions = cohort.getUsers() != null ? 
+                cohort.getUsers().stream()
+                    .mapToLong(user -> {
+                        try {
+                            return user.getSessions() != null ? user.getSessions().size() : 0;
+                        } catch (Exception e) {
+                            return 0;
+                        }
+                    })
+                    .sum() : 0;
+            
+            stats.setTotalUsers(totalUsers);
+            stats.setActiveUsers(activeUsers);
+            stats.setInactiveUsers(totalUsers - activeUsers);
+            stats.setTotalSessions(totalSessions);
+            stats.setTotalStages(totalStages);
+            stats.setActiveUserPercentage(totalUsers > 0 ? (double) activeUsers / totalUsers * 100 : 0.0);
+            
+            // Initialize empty lists for summaries (you can populate these based on your needs)
+            stats.setSessionSummaries(Collections.emptyList());
+            stats.setStageSummaries(Collections.emptyList());
+            
+        } catch (Exception e) {
+            // Handle any exceptions during statistics calculation
+            stats.setTotalUsers(0L);
+            stats.setActiveUsers(0L);
+            stats.setInactiveUsers(0L);
+            stats.setTotalSessions(0L);
+            stats.setTotalStages(0L);
+            stats.setActiveUserPercentage(0.0);
+            stats.setSessionSummaries(Collections.emptyList());
+            stats.setStageSummaries(Collections.emptyList());
+        }
+        
+        return stats;
     }
 }
