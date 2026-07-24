@@ -30,10 +30,9 @@ secret-scan:
 # ---------- 2. SAST ----------
 sast-semgrep:
   stage: sast
-  image:
-    name: semgrep/semgrep:latest
-    entrypoint: [""]
+  image: python:3.12-slim
   script:
+    - pip install semgrep
     - semgrep scan --config p/java --error
 
 # ---------- 3. DEPENDENCY / SCA ----------
