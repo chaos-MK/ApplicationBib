@@ -30,14 +30,18 @@ secret-scan:
 # ---------- 2. SAST ----------
 sast-semgrep:
   stage: sast
-  image: semgrep/semgrep:latest
+  image:
+    name: semgrep/semgrep:latest
+    entrypoint: [""]
   script:
     - semgrep scan --config p/java --error
 
 # ---------- 3. DEPENDENCY / SCA ----------
 dependency-scan-snyk:
   stage: dependency
-  image: snyk/snyk:maven
+  image:
+    name: snyk/snyk:maven
+    entrypoint: [""]
   script:
     - snyk auth $SNYK_TOKEN
     - snyk test --severity-threshold=high
@@ -45,7 +49,9 @@ dependency-scan-snyk:
 # ---------- 4. DOCKERFILE LINT ----------
 dockerfile-lint:
   stage: lint
-  image: hadolint/hadolint:latest-debian
+  image:
+    name: hadolint/hadolint:latest-debian
+    entrypoint: [""]
   script:
     - hadolint Dockerfile
 
@@ -65,7 +71,9 @@ build-image:
 # ---------- 6. SBOM ----------
 sbom-syft:
   stage: sbom
-  image: anchore/syft:latest
+  image:
+    name: anchore/syft:latest
+    entrypoint: [""]
   script:
     - syft dir:. -o cyclonedx-json=sbom.json
   artifacts:
@@ -76,7 +84,9 @@ sbom-syft:
 # ---------- 7. CONTAINER IMAGE SCANNING (two scanners, compared) ----------
 image-scan-trivy:
   stage: image-scan
-  image: aquasec/trivy:latest
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
   needs: ["build-image"]
   script:
     - trivy image
@@ -88,7 +98,9 @@ image-scan-trivy:
 
 image-scan-grype:
   stage: image-scan
-  image: anchore/grype:latest
+  image:
+    name: anchore/grype:latest
+    entrypoint: [""]
   needs: ["build-image"]
   variables:
     GRYPE_REGISTRY_AUTH_USERNAME: $CI_REGISTRY_USER
