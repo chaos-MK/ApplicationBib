@@ -21,7 +21,9 @@ variables:
 # ---------- 1. SECRETS ----------
 secret-scan:
   stage: secrets
-  image: zricethezav/gitleaks:latest
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
   script:
     - gitleaks detect --source . --verbose --redact
 
