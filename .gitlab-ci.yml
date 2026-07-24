@@ -1,0 +1,95 @@
+# .gitlab-ci.yml
+
+stages:
+  - secrets
+  - sast
+  - dependency
+  - lint
+  - build
+  - sbom
+  - image-scan
+
+# Controls WHEN the whole pipeline runs at all (applies to every job below)
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+variables:
+  GIT_DEPTH: 0   # full history — needed for Gitleaks to catch old leaked secrets
+
+# ---------- 1. SECRETS ----------
+secret-scan:
+  stage: secrets
+  image: zricethezav/gitleaks:latest
+  script:
+    - gitleaks detect --source . --verbose --redact
+
+# ---------- 2. SAST ----------
+sast-semgrep:
+  stage: sast
+  image: semgrep/semgrep:latest
+  script:
+    - semgrep scan --config p/java --error
+
+# ---------- 3. DEPENDENCY / SCA ----------
+dependency-scan-snyk:
+  stage: dependency
+  image: snyk/snyk:maven
+  script:
+    - snyk auth $SNYK_TOKEN
+    - snyk test --severity-threshold=high
+
+# ---------- 4. DOCKERFILE LINT ----------
+dockerfile-lint:
+  stage: lint
+  image: hadolint/hadolint:latest-debian
+  script:
+    - hadolint Dockerfile
+
+# ---------- 5. BUILD & PUSH IMAGE ----------
+build-image:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA .
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+
+# ---------- 6. SBOM ----------
+sbom-syft:
+  stage: sbom
+  image: anchore/syft:latest
+  script:
+    - syft dir:. -o cyclonedx-json=sbom.json
+  artifacts:
+    paths:
+      - sbom.json
+    expire_in: 30 days
+
+# ---------- 7. CONTAINER IMAGE SCANNING (two scanners, compared) ----------
+image-scan-trivy:
+  stage: image-scan
+  image: aquasec/trivy:latest
+  needs: ["build-image"]
+  script:
+    - trivy image
+      --username $CI_REGISTRY_USER
+      --password $CI_REGISTRY_PASSWORD
+      --severity CRITICAL,HIGH
+      --exit-code 1
+      $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+
+image-scan-grype:
+  stage: image-scan
+  image: anchore/grype:latest
+  needs: ["build-image"]
+  variables:
+    GRYPE_REGISTRY_AUTH_USERNAME: $CI_REGISTRY_USER
+    GRYPE_REGISTRY_AUTH_PASSWORD: $CI_REGISTRY_PASSWORD
+  script:
+    - grype $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA --fail-on high
