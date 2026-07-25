@@ -1,24 +1,154 @@
-## Finding #001 — Hardcoded database password in application.yml
+# Security Findings Log
 
-**Date:** 2026-07-21
-**Tool that found it:** Gitleaks
-**Severity:** Critical
-**Location:** `src/main/resources/application.yml`, line 14
+## Finding #001 — Critical/High: 38 CVEs via outdated Spring Boot parent (tomcat, devtools, actuator, data-jpa, security, test)
+
+**Date:** 2026-07-25
+**Tool that found it:** Snyk
+**Severity:** Critical + High (mixed, 38 total findings)
+**Packages affected:** tomcat-embed-jasper, spring-boot-devtools, spring-boot-starter-actuator,
+spring-boot-starter-data-jpa, spring-boot-starter-security, spring-boot-starter-test
+(all transitively via spring-boot-starter-parent@3.4.3)
 
 ### Risk
-The PostgreSQL password was committed in plaintext to the repository.
-Anyone with read access to the repo (including in git history, even
-after deletion) could connect directly to the production database.
-This violates the principle of never storing secrets in source control.
+38 of 57 total Snyk findings traced back to a single root cause: the project
+pinned to Spring Boot 3.4.3. Notable issues in this group included:
+- Authentication bypass in Actuator (unauthenticated access to management endpoints)
+- Missing authentication / cache exposure in Spring Security
+- Certificate validation and authentication flaws in embedded Tomcat
+- Denial-of-service and resource exhaustion issues in Spring Data
+
+Since all six packages are version-managed by Spring Boot's parent BOM,
+one version bump remediates all 38.
 
 ### What I did
-1. Rotated the exposed database password immediately (old one is now invalid).
-2. Removed the hardcoded value from `application.yml`.
-3. Replaced it with an environment variable reference: `${DB_PASSWORD}`.
-4. Added the real value as a GitLab CI/CD masked variable instead.
-5. Confirmed via `git log -p` that no other secrets exist in history
-   (ran Gitleaks against full history, not just the current commit).
+1. Grouped all Snyk findings by "Upgrade X to fix" root cause instead of
+   treating each CVE individually.
+2. Upgraded `spring-boot-starter-parent` from 3.4.3 to 3.5.15 in `pom.xml`.
+3. Ran `./mvnw clean verify` to confirm no breaking changes.
+4. Re-ran the Snyk scan and confirmed these 38 findings no longer appear.
 
 ### What changed
-- `application.yml`: `password: hunter2` → `password: ${DB_PASSWORD}`
-- Added `DB_PASSWORD` as a protected, masked variable in GitLab Settings → CI/CD → Variables
+- `pom.xml`: `<version>3.4.3</version>` → `<version>3.5.15</version>` (parent)
+
+**Status:** ✅ Fixed
+
+
+## Finding #002 — High: 14 CVEs in spring-boot-starter-web (jackson, spring-webmvc, logback)
+
+**Date:** 2026-07-25
+**Tool that found it:** Snyk
+**Severity:** High + Critical (2 critical: SNYK-JAVA-COMFASTERXMLJACKSONCORE-17440366 and -17440598)
+**Package:** org.springframework.boot:spring-boot-starter-web@3.4.3
+
+### Risk
+14 issues stem from spring-boot-starter-web, including two Critical findings
+in jackson-databind: Incomplete List of Disallowed Inputs and Deserialization
+of Untrusted Data — the latter can lead to remote code execution if the
+application deserializes attacker-controlled JSON. Also present: directory
+traversal and forced-browsing issues in spring-webmvc, and an expression
+injection issue in logback-core.
+
+Unlike the Finding #001 group, Snyk's suggested fix version for this package
+is spring-boot-starter-web **4.0.0** — a major version, not covered by the
+3.5.15 minor bump. Spring Boot 4.x may include breaking API changes
+(different baseline Java version, possible package/config changes).
+
+### What I did
+1. Confirmed via `./mvnw dependency:tree` that these CVEs persist after the
+   3.5.15 bump, since starter-web's managed version only tracks 3.x.
+2. [Pending] Evaluating Spring Boot 4.0.0 migration — this needs a dedicated
+   testing pass, not a drop-in bump, due to major-version breaking-change risk.
+
+### What changed
+- Not yet changed — tracked separately from Finding #001 due to migration risk.
+
+**Status:** ⏳ Pending — requires a dedicated Spring Boot 4.x migration/testing pass
+
+
+## Finding #003 — High: Incorrect Default Permissions in mysql-connector-j
+
+**Date:** 2026-07-25
+**Tool that found it:** Snyk
+**Severity:** High
+**Package:** com.mysql:mysql-connector-j@9.1.0
+
+### Risk
+Snyk flagged Incorrect Default Permissions (SNYK-JAVA-COMMYSQL-9725315) in
+the MySQL JDBC driver. Not Spring-managed — declared directly in `pom.xml`
+with an explicit version, so it required its own bump.
+
+### What I did
+1. Updated the explicit dependency version in `pom.xml`.
+2. Ran `./mvnw clean verify` to confirm connectivity still works.
+3. Re-ran Snyk scan to confirm the finding is resolved.
+
+### What changed
+```xml
+<!-- before -->
+<mysql.version>9.1.0</mysql.version>
+<!-- after -->
+<mysql.version>9.3.0</mysql.version>
+```
+
+**Status:** ✅ Fixed
+
+
+## Finding #004 — High: 3 CVEs in PostgreSQL JDBC driver
+
+**Date:** 2026-07-25
+**Tool that found it:** Snyk
+**Severity:** High
+**Package:** org.postgresql:postgresql@42.7.5
+
+### Risk
+Two instances of Incorrect Implementation of Authentication Algorithm and
+one Allocation of Resources Without Limits (potential DoS) in the PostgreSQL
+JDBC driver. This is the driver used for the app's live database connection,
+so an auth-algorithm flaw here is directly relevant to production data access.
+
+### What I did
+1. Bumped the explicit driver version.
+2. Ran integration tests against the Postgres service container in CI to
+   confirm the connection still works post-upgrade.
+3. Re-ran Snyk scan to confirm resolution.
+
+### What changed
+```xml
+<!-- before -->
+<postgresql.version>42.7.5</postgresql.version>
+<!-- after -->
+<postgresql.version>42.7.12</postgresql.version>
+```
+
+**Status:** ✅ Fixed
+
+
+## Finding #005 — High: Uncontrolled Recursion in commons-lang3 (via springdoc-openapi)
+
+**Date:** 2026-07-25
+**Tool that found it:** Snyk
+**Severity:** High
+**Package:** org.apache.commons:commons-lang3@3.17.0 (transitive via springdoc-openapi-starter-webmvc-ui@2.1.0)
+
+### Risk
+Uncontrolled Recursion (SNYK-JAVA-ORGAPACHECOMMONS-10734078) could allow a
+crafted input to trigger a stack overflow / denial of service. Pulled in
+transitively through the OpenAPI/Swagger documentation dependency, not a
+direct project dependency.
+
+### What I did
+1. Upgraded springdoc-openapi-starter-webmvc-ui directly, since it's an
+   independent project not covered by the Spring Boot BOM.
+2. Confirmed the Swagger UI (`/swagger-ui.html`) still renders correctly
+   after the bump.
+3. Re-ran Snyk scan to confirm resolution.
+
+### What changed
+```xml
+<!-- before -->
+<springdoc.version>2.1.0</springdoc.version>
+<!-- after -->
+<springdoc.version>2.8.10</springdoc.version>
+```
+
+**Status:** ✅ Fixed
