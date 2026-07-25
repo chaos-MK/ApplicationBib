@@ -43,7 +43,7 @@ dependency-scan-snyk:
     entrypoint: [""]
   script:
     - snyk auth $SNYK_TOKEN
-    - snyk test --severity-threshold=high
+    - snyk test --severity-threshold=high -d
 
 # ---------- 4. DOCKERFILE LINT ----------
 dockerfile-lint:
