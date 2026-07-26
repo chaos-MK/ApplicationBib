@@ -8,7 +8,8 @@ RUN mvn -B package -DskipTests
 
 # --- Runtime stage ---
 FROM eclipse-temurin:21-jre-alpine
-RUN apk update && apk upgrade --no-cache
+RUN apk update && apk upgrade --no-cache && \
+    apk del --no-cache gnupg gnupg-dirmngr gnupg-gpgconf gnupg-keyboxd gnupg-utils gnupg-wks-client gpg gpg-agent gpg-wks-server gpgsm gpgv 2>/dev/null || true
 WORKDIR /app
 RUN addgroup -S app && adduser -S app -G app
 COPY --from=build /app/target/*.jar app.jar
