@@ -70,11 +70,11 @@ build-image:
 # ---------- 6. SBOM ----------
 sbom-syft:
   stage: sbom
-  image:
-    name: anchore/syft:latest
-    entrypoint: [""]
+  image: docker:24
+  services:
+    - docker:24-dind
   script:
-    - syft dir:. -o cyclonedx-json=sbom.json
+    - docker run --rm -v "$PWD:/src" anchore/syft:latest dir:/src -o cyclonedx-json=/src/sbom.json
   artifacts:
     paths:
       - sbom.json
@@ -97,12 +97,13 @@ image-scan-trivy:
 
 image-scan-grype:
   stage: image-scan
-  image:
-    name: anchore/grype:latest
-    entrypoint: [""]
+  image: docker:24
+  services:
+    - docker:24-dind
   needs: ["build-image"]
-  variables:
-    GRYPE_REGISTRY_AUTH_USERNAME: $CI_REGISTRY_USER
-    GRYPE_REGISTRY_AUTH_PASSWORD: $CI_REGISTRY_PASSWORD
   script:
-    - grype $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA --fail-on high
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker run --rm
+        -e GRYPE_REGISTRY_AUTH_USERNAME=$CI_REGISTRY_USER
+        -e GRYPE_REGISTRY_AUTH_PASSWORD=$CI_REGISTRY_PASSWORD
+        anchore/grype:latest $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA --fail-on high
