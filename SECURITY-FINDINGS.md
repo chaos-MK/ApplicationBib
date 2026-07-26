@@ -35,7 +35,7 @@ one version bump remediates all 38.
 
 ## Finding #002 — High/Critical: 14 CVEs in spring-boot-starter-web (jackson, spring-webmvc, logback)
 
-**Date:** 2026-07-26
+**Date:** 2026-07-25
 **Tool that found it:** Snyk
 **Severity:** High + Critical (2 critical: jackson-databind RCE + incomplete input validation)
 **Package:** org.springframework.boot:spring-boot-starter-web@3.4.3
