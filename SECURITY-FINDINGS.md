@@ -173,6 +173,8 @@ RUN apk update && apk upgrade --no-cache && \
 **Status:** Fixed — Trivy and Grype both pass at `--fail-on high` threshold.
 
 
+## Summary
+
 | Finding | CVEs/Issues Covered | Tool | Status |
 |---|---|---|---|
 | #001 | 38 | Snyk | ✅ Fixed |
