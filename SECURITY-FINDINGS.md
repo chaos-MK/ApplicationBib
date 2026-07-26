@@ -129,3 +129,52 @@ managed version tracked the 3.x line.
   shared transitive dependency (Jackson).
 
 **Status:** Fixed — Snyk reports 0 findings at `--severity-threshold=high` as of 2026-07-26.
+
+
+## Finding #003 — High: OS-level CVEs in container base image (sqlite-libs) + unnecessary attack surface (gnupg)
+
+**Date:** 2026-07-26
+**Tool that found it:** Trivy, Grype (cross-validated by both scanners)
+**Severity:** High (sqlite-libs) + Low/Medium (gnupg, coreutils, busybox)
+**Package:** eclipse-temurin:21-jre-alpine base image — sqlite-libs, gnupg suite, coreutils, busybox
+
+### Risk
+Trivy and Grype both flagged outdated OS packages baked into the
+`eclipse-temurin:21-jre-alpine` base image, not introduced by application
+code. Two High-severity findings in `sqlite-libs` (CVE-2026-11822,
+CVE-2026-11824) were the primary blockers. Additionally, the image shipped
+a full `gnupg` suite (10+ packages) that a runtime JRE application has no
+functional need for — unused software in a container image is unnecessary
+attack surface, since any CVE in it is exposure with no offsetting benefit.
+
+### What I did
+1. Cross-checked the finding with two independent scanners (Trivy and
+   Grype) to confirm it wasn't a tool-specific false positive before
+   investigating further — initially suspected a scanning misconfiguration
+   until a debug step confirmed the image and findings were both correct.
+2. Added `apk update && apk upgrade --no-cache` to the Dockerfile's runtime
+   stage to patch all available OS package updates at build time.
+3. Removed the entire `gnupg` package group via `apk del`, since it is not
+   required for the application to run and reduces the image's attack
+   surface regardless of its own CVE status.
+4. Re-built and re-scanned with both Trivy and Grype to confirm the High
+   severity findings were resolved.
+
+### What changed
+`Dockerfile` (runtime stage):
+```dockerfile
+FROM eclipse-temurin:21-jre-alpine
+RUN apk update && apk upgrade --no-cache && \
+    apk del --no-cache gnupg gnupg-dirmngr gnupg-gpgconf gnupg-keyboxd \
+    gnupg-utils gnupg-wks-client gpg gpg-agent gpg-wks-server gpgsm gpgv \
+    2>/dev/null || true
+```
+
+**Status:** Fixed — Trivy and Grype both pass at `--fail-on high` threshold.
+
+
+| Finding | CVEs/Issues Covered | Tool | Status |
+|---|---|---|---|
+| #001 | 38 | Snyk | ✅ Fixed |
+| #002 | 19 | Snyk | ✅ Fixed |
+| #003 | OS-level (2 High + hardening) | Trivy, Grype | ✅ Fixed |
