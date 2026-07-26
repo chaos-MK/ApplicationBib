@@ -1,168 +1,131 @@
 # Security Findings Log
 
-## Finding #001 — Critical/High: 38 CVEs via outdated Spring Boot parent (tomcat, devtools, actuator, data-jpa, security, test)
+This log documents vulnerabilities identified by automated security scanning
+in the GitLab CI/CD pipeline (Gitleaks, Semgrep, Snyk, Hadolint, Trivy, Grype,
+Syft), and the remediation applied for each.
+
+---
+
+## Finding #001 — Critical/High: 38 CVEs via outdated Spring Boot parent version
 
 **Date:** 2026-07-25
 **Tool that found it:** Snyk
-**Severity:** Critical + High (mixed, 38 total findings)
-**Packages affected:** tomcat-embed-jasper, spring-boot-devtools, spring-boot-starter-actuator,
-spring-boot-starter-data-jpa, spring-boot-starter-security, spring-boot-starter-test
+**Severity:** Critical + High (38 findings)
+**Packages affected:** tomcat-embed-jasper, spring-boot-devtools,
+spring-boot-starter-actuator, spring-boot-starter-data-jpa,
+spring-boot-starter-security, spring-boot-starter-test
 (all transitively via spring-boot-starter-parent@3.4.3)
 
 ### Risk
 38 of 57 total Snyk findings traced back to a single root cause: the project
-pinned to Spring Boot 3.4.3. Notable issues in this group included:
-- Authentication bypass in Actuator (unauthenticated access to management endpoints)
-- Missing authentication / cache exposure in Spring Security
-- Certificate validation and authentication flaws in embedded Tomcat
-- Denial-of-service and resource exhaustion issues in Spring Data
+was pinned to Spring Boot 3.4.3. Notable issues in this group:
+- Authentication bypass in Spring Boot Actuator — could allow unauthenticated
+  access to management endpoints (health, env, metrics).
+- Missing authentication / cache exposure in Spring Security.
+- Certificate validation and authentication flaws in embedded Tomcat.
+- Denial-of-service and resource exhaustion issues in Spring Data.
 
-Since all six packages are version-managed by Spring Boot's parent BOM,
-one version bump remediates all 38.
+All six packages are version-managed by Spring Boot's parent BOM, so one
+version bump remediated all 38 at once.
 
 ### What I did
-1. Grouped all Snyk findings by "Upgrade X to fix" root cause instead of
+1. Grouped Snyk findings by "Upgrade X to fix" root cause instead of
    treating each CVE individually.
-2. Upgraded `spring-boot-starter-parent` from 3.4.3 to 3.5.15 in `pom.xml`.
+2. Upgraded `spring-boot-starter-parent` from 3.4.3 to 3.5.15.
 3. Ran `./mvnw clean verify` to confirm no breaking changes.
-4. Re-ran the Snyk scan and confirmed these 38 findings no longer appear.
+4. Re-ran Snyk and confirmed all 38 findings resolved.
 
 ### What changed
 - `pom.xml`: `<version>3.4.3</version>` → `<version>3.5.15</version>` (parent)
 
-**Status:** ✅ Fixed
+**Status:** Fixed
 
 
-## Finding #002 — High/Critical: 14 CVEs in spring-boot-starter-web (jackson, spring-webmvc, logback)
+## Finding #002 — High/Critical: 14+ CVEs in spring-boot-starter-web (jackson, spring-webmvc, tomcat) — required major version migration
 
-**Date:** 2026-07-25
+**Date:** 2026-07-25 → 2026-07-26 (multi-day fix, tracked as one entry due to
+a shared root cause and iterative remediation)
 **Tool that found it:** Snyk
-**Severity:** High + Critical (2 critical: jackson-databind RCE + incomplete input validation)
-**Package:** org.springframework.boot:spring-boot-starter-web@3.4.3
+**Severity:** Critical + High
+**Package:** org.springframework.boot:spring-boot-starter-web
 
 ### Risk
 14 issues stemmed from spring-boot-starter-web, including two Critical
 findings in jackson-databind — Incomplete List of Disallowed Inputs and
 Deserialization of Untrusted Data — which could lead to remote code
-execution if the application deserializes attacker-controlled JSON.
-Also present: directory traversal and forced-browsing issues in
-spring-webmvc, and an expression injection issue in logback-core.
+execution if the application deserializes attacker-controlled JSON. Also
+present: directory traversal and forced-browsing issues in spring-webmvc,
+and an expression injection issue in logback-core.
 
-Snyk's suggested fix required spring-boot-starter-web 4.0.0, a major
-version bump not covered by the earlier 3.5.15 minor upgrade.
+Unlike Finding #001, Snyk's fix required spring-boot-starter-web **4.0.0**
+— a major version not covered by a minor parent bump, since starter-web's
+managed version tracked the 3.x line.
 
-### What I did
-1. Reviewed `./mvnw dependency:tree` to confirm no other dependencies were
-   hard-pinned to incompatible Spring Framework/Jakarta versions before
-   attempting the major-version jump.
-2. Upgraded spring-boot-starter-parent from 3.5.15 to 4.0.0.
-3. Fixed 6 pre-existing compile errors surfaced by the stricter Boot 4.0
-   toolchain — several classes had both a Lombok constructor annotation
-   (@RequiredArgsConstructor/@NoArgsConstructor) and a manually written
-   constructor with identical parameters, which the newer compiler plugin
-   correctly flagged as duplicate constructors. Removed the redundant
-   Lombok constructor annotations while keeping the explicit constructors.
-4. Ran `./mvnw clean verify` — full test suite (including Postgres
-   integration test) passed, jar built and repackaged successfully.
-5. Manually verified the application starts and core endpoints respond
+### What I did — full remediation path
+1. **Compatibility check:** reviewed `./mvnw dependency:tree` and confirmed
+   Java 21 and no other dependencies were hard-pinned to a version
+   incompatible with Boot 4.
+2. **Major version upgrade:** bumped `spring-boot-starter-parent` from
+   3.5.15 to 4.0.0.
+3. **Fixed pre-existing code defects surfaced by the stricter Boot 4.0
+   compiler toolchain:** 6 classes had both a Lombok-generated constructor
+   (`@RequiredArgsConstructor` / `@NoArgsConstructor`) and a manually
+   written constructor with identical parameters — previously tolerated,
+   now correctly flagged as duplicate constructors. Removed the redundant
+   manual constructors (CohortService, ProjectResolver, SessionService,
+   CompanyService, ProjectService, CohortDTO.UserDTO).
+4. **New CVEs surfaced on 4.0.0 itself:** since Boot 4.0.0 was a very
+   recent major release, Snyk immediately flagged 50 issues against it —
+   mostly the same package family (tomcat-embed-jasper, devtools,
+   actuator, security, springdoc, spring-boot-starter-web again) now
+   fixed in Boot's own subsequent patch releases. Bumped parent to 4.0.7.
+5. **springdoc-openapi major version migration:** identified that
+   springdoc-openapi 2.8.x only supports Spring Boot 3.x; Boot 4.x
+   requires springdoc's new 3.x line (Jackson 3–based). Upgraded
+   `springdoc-openapi-starter-webmvc-ui` from 2.8.10 to 3.0.3, which
+   resolved a `ClassNotFoundException` (`WebMvcProperties`) caused by
+   the version mismatch and fixed the app context failing to load in
+   tests.
+6. **Residual Jackson CVEs:** after the above, two Jackson findings
+   remained across two different dependency lines — legacy Jackson 2.x
+   (pulled in by springdoc/swagger) and Boot 4's native Jackson 3.x
+   (`tools.jackson`). Pinned both explicitly via `<dependencyManagement>`
+   since no single parent property covered both simultaneously.
+7. **Residual Tomcat CVE:** `tomcat-embed-jasper` was bumped to the
+   patched version, but its transitive `tomcat-embed-core` dependency
+   still resolved to an older, vulnerable version. Forced the correct
+   version directly via `<dependencyManagement>`.
+8. Ran `./mvnw clean verify` after each change (full test suite,
+   including the Postgres integration test) to catch regressions early.
+9. Manually verified the app starts and core endpoints/Swagger UI respond
    via `./mvnw spring-boot:run`.
-6. Re-ran the Snyk scan in the GitLab CI/CD pipeline to confirm all 14
-   findings in this group are resolved.
+10. Re-ran the Snyk scan in CI after each round until the finding count
+    reached 0.
 
 ### What changed
-- `pom.xml`: `<version>3.5.15</version>` → `<version>4.0.0</version>` (parent)
-- 6 Java files: removed duplicate Lombok constructor annotations that
-  conflicted with explicitly defined constructors (CohortService,
-  ProjectResolver, SessionService, CompanyService,
-  ProjectService, CohortDTO.UserDTO)
+- `pom.xml`:
+  - Parent: `3.4.3` → `4.0.0` → `4.0.7`
+  - `springdoc-openapi-starter-webmvc-ui`: `2.8.10` → `3.0.3`
+  - `tomcat-embed-jasper`: explicit version pinned to `11.0.23`
+  - Added `<dependencyManagement>` overrides:
+    - `com.fasterxml.jackson.core:jackson-databind` → `2.21.5`
+    - `tools.jackson.core:jackson-databind` → `3.1.5`
+    - `org.apache.tomcat.embed:tomcat-embed-core` → `11.0.23`
+  - Added `<properties><logback.version>1.5.36</logback.version></properties>`
+    to close a logback expression-injection CVE with no upstream Spring
+    Boot patch yet available.
+- 6 Java files: removed duplicate constructors conflicting with Lombok.
 
-**Status:** ✅ Fixed
+### Lessons learned (worth keeping for the interview writeup)
+- A major-version dependency bump can temporarily *increase* the number of
+  findings before it decreases them, since brand-new releases haven't
+  been patched yet — verify against the latest patch version, not just
+  the latest major version.
+- Not every CVE closes with a single parent-BOM bump; transitive
+  dependencies (tomcat-embed-core here) can lag behind their own parent
+  artifact and need to be pinned explicitly.
+- Migrating one major dependency (Boot 4) can force a cascading major
+  migration in an unrelated dependency (springdoc 2.x → 3.x) due to a
+  shared transitive dependency (Jackson).
 
-
-## Finding #003 — High: Incorrect Default Permissions in mysql-connector-j
-
-**Date:** 2026-07-25
-**Tool that found it:** Snyk
-**Severity:** High
-**Package:** com.mysql:mysql-connector-j@9.1.0
-
-### Risk
-Snyk flagged Incorrect Default Permissions (SNYK-JAVA-COMMYSQL-9725315) in
-the MySQL JDBC driver. Not Spring-managed — declared directly in `pom.xml`
-with an explicit version, so it required its own bump.
-
-### What I did
-1. Updated the explicit dependency version in `pom.xml`.
-2. Ran `./mvnw clean verify` to confirm connectivity still works.
-3. Re-ran Snyk scan to confirm the finding is resolved.
-
-### What changed
-```xml
-<!-- before -->
-<mysql.version>9.1.0</mysql.version>
-<!-- after -->
-<mysql.version>9.3.0</mysql.version>
-```
-
-**Status:** ✅ Fixed
-
-
-## Finding #004 — High: 3 CVEs in PostgreSQL JDBC driver
-
-**Date:** 2026-07-25
-**Tool that found it:** Snyk
-**Severity:** High
-**Package:** org.postgresql:postgresql@42.7.5
-
-### Risk
-Two instances of Incorrect Implementation of Authentication Algorithm and
-one Allocation of Resources Without Limits (potential DoS) in the PostgreSQL
-JDBC driver. This is the driver used for the app's live database connection,
-so an auth-algorithm flaw here is directly relevant to production data access.
-
-### What I did
-1. Bumped the explicit driver version.
-2. Ran integration tests against the Postgres service container in CI to
-   confirm the connection still works post-upgrade.
-3. Re-ran Snyk scan to confirm resolution.
-
-### What changed
-```xml
-<!-- before -->
-<postgresql.version>42.7.5</postgresql.version>
-<!-- after -->
-<postgresql.version>42.7.12</postgresql.version>
-```
-
-**Status:** ✅ Fixed
-
-
-## Finding #005 — High: Uncontrolled Recursion in commons-lang3 (via springdoc-openapi)
-
-**Date:** 2026-07-25
-**Tool that found it:** Snyk
-**Severity:** High
-**Package:** org.apache.commons:commons-lang3@3.17.0 (transitive via springdoc-openapi-starter-webmvc-ui@2.1.0)
-
-### Risk
-Uncontrolled Recursion (SNYK-JAVA-ORGAPACHECOMMONS-10734078) could allow a
-crafted input to trigger a stack overflow / denial of service. Pulled in
-transitively through the OpenAPI/Swagger documentation dependency, not a
-direct project dependency.
-
-### What I did
-1. Upgraded springdoc-openapi-starter-webmvc-ui directly, since it's an
-   independent project not covered by the Spring Boot BOM.
-2. Confirmed the Swagger UI (`/swagger-ui.html`) still renders correctly
-   after the bump.
-3. Re-ran Snyk scan to confirm resolution.
-
-### What changed
-```xml
-<!-- before -->
-<springdoc.version>2.1.0</springdoc.version>
-<!-- after -->
-<springdoc.version>2.8.10</springdoc.version>
-```
-
-**Status:** ✅ Fixed
+**Status:** Fixed — Snyk reports 0 findings at `--severity-threshold=high` as of 2026-07-26.
