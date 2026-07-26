@@ -108,4 +108,5 @@ image-scan-grype:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
-    - grype docker:$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA --fail-on high
+    - docker save $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -o image.tar
+    - grype docker-archive:image.tar --fail-on high
