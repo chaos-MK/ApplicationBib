@@ -33,39 +33,48 @@ one version bump remediates all 38.
 **Status:** ✅ Fixed
 
 
-## Finding #002 — High: 14 CVEs in spring-boot-starter-web (jackson, spring-webmvc, logback)
+## Finding #002 — High/Critical: 14 CVEs in spring-boot-starter-web (jackson, spring-webmvc, logback)
 
-**Date:** 2026-07-25
+**Date:** 2026-07-26
 **Tool that found it:** Snyk
-**Severity:** High + Critical (2 critical: SNYK-JAVA-COMFASTERXMLJACKSONCORE-17440366 and -17440598)
+**Severity:** High + Critical (2 critical: jackson-databind RCE + incomplete input validation)
 **Package:** org.springframework.boot:spring-boot-starter-web@3.4.3
 
 ### Risk
-14 issues stem from spring-boot-starter-web, including two Critical findings
-in jackson-databind: Incomplete List of Disallowed Inputs and Deserialization
-of Untrusted Data — the latter can lead to remote code execution if the
-application deserializes attacker-controlled JSON. Also present: directory
-traversal and forced-browsing issues in spring-webmvc, and an expression
-injection issue in logback-core.
+14 issues stemmed from spring-boot-starter-web, including two Critical
+findings in jackson-databind — Incomplete List of Disallowed Inputs and
+Deserialization of Untrusted Data — which could lead to remote code
+execution if the application deserializes attacker-controlled JSON.
+Also present: directory traversal and forced-browsing issues in
+spring-webmvc, and an expression injection issue in logback-core.
 
-Unlike the Finding #001 group, Snyk's suggested fix version for this package
-is spring-boot-starter-web **4.0.0** — a major version, not covered by the
-3.5.15 minor bump. Spring Boot 4.x may include breaking API changes
-(different baseline Java version, possible package/config changes).
+Snyk's suggested fix required spring-boot-starter-web 4.0.0, a major
+version bump not covered by the earlier 3.5.15 minor upgrade.
 
 ### What I did
-1. Confirmed via `./mvnw dependency:tree` that these CVEs persist after the
-   3.5.15 bump, since starter-web's managed version only tracks 3.x.
-2. Verified Java 21 compatibility and checked no other dependencies were
-   hard-pinned to incompatible Spring Framework/Jakarta versions.
-3. Upgraded spring-boot-starter-parent from 3.5.15 to 4.0.0.
-4. Ran `./mvnw clean verify` (full test suite incl. Postgres integration
-   tests) to confirm no breaking changes.
-5. Manually verified core endpoints locally before pushing.
-6. Re-ran Snyk scan in CI to confirm all 14 findings resolved.
+1. Reviewed `./mvnw dependency:tree` to confirm no other dependencies were
+   hard-pinned to incompatible Spring Framework/Jakarta versions before
+   attempting the major-version jump.
+2. Upgraded spring-boot-starter-parent from 3.5.15 to 4.0.0.
+3. Fixed 6 pre-existing compile errors surfaced by the stricter Boot 4.0
+   toolchain — several classes had both a Lombok constructor annotation
+   (@RequiredArgsConstructor/@NoArgsConstructor) and a manually written
+   constructor with identical parameters, which the newer compiler plugin
+   correctly flagged as duplicate constructors. Removed the redundant
+   Lombok constructor annotations while keeping the explicit constructors.
+4. Ran `./mvnw clean verify` — full test suite (including Postgres
+   integration test) passed, jar built and repackaged successfully.
+5. Manually verified the application starts and core endpoints respond
+   via `./mvnw spring-boot:run`.
+6. Re-ran the Snyk scan in the GitLab CI/CD pipeline to confirm all 14
+   findings in this group are resolved.
 
 ### What changed
 - `pom.xml`: `<version>3.5.15</version>` → `<version>4.0.0</version>` (parent)
+- 6 Java files: removed duplicate Lombok constructor annotations that
+  conflicted with explicitly defined constructors (CohortService,
+  ProjectResolver, SessionService, CompanyService,
+  ProjectService, CohortDTO.UserDTO)
 
 **Status:** ✅ Fixed
 
