@@ -204,8 +204,6 @@ public class CohortDTO {
         private Long sessionCount;
         private Long stageCount;
         
-        // Constructors
-        public UserDTO() {}
         
         // Getters and Setters for all fields including the new ones
         public Long getId() { return id; }

@@ -2,11 +2,9 @@ package com.bib.app.service;
 
 import com.bib.app.dto.ProjectDTO;
 import com.bib.app.entities.Project;
-import com.bib.app.repository.CompanyRepository;
 import com.bib.app.repository.ProjectRepository;
 import com.bib.app.resolver.ProjectResolver;
 import jakarta.persistence.EntityNotFoundException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,7 +13,6 @@ import java.util.List;
 import java.util.Optional;
 
 @Slf4j
-@RequiredArgsConstructor
 @Service
 public class ProjectService implements  IProjectService{
     private final ProjectRepository projectRepository;

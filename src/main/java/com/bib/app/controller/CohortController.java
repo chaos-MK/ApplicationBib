@@ -3,7 +3,6 @@ package com.bib.app.controller;
 import com.bib.app.service.ICohortService;
 import com.bib.app.resolver.CohortResolver;
 import com.bib.app.dto.CohortDTO;
-import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;

@@ -56,13 +56,18 @@ is spring-boot-starter-web **4.0.0** — a major version, not covered by the
 ### What I did
 1. Confirmed via `./mvnw dependency:tree` that these CVEs persist after the
    3.5.15 bump, since starter-web's managed version only tracks 3.x.
-2. [Pending] Evaluating Spring Boot 4.0.0 migration — this needs a dedicated
-   testing pass, not a drop-in bump, due to major-version breaking-change risk.
+2. Verified Java 21 compatibility and checked no other dependencies were
+   hard-pinned to incompatible Spring Framework/Jakarta versions.
+3. Upgraded spring-boot-starter-parent from 3.5.15 to 4.0.0.
+4. Ran `./mvnw clean verify` (full test suite incl. Postgres integration
+   tests) to confirm no breaking changes.
+5. Manually verified core endpoints locally before pushing.
+6. Re-ran Snyk scan in CI to confirm all 14 findings resolved.
 
 ### What changed
-- Not yet changed — tracked separately from Finding #001 due to migration risk.
+- `pom.xml`: `<version>3.5.15</version>` → `<version>4.0.0</version>` (parent)
 
-**Status:** ⏳ Pending — requires a dedicated Spring Boot 4.x migration/testing pass
+**Status:** ✅ Fixed
 
 
 ## Finding #003 — High: Incorrect Default Permissions in mysql-connector-j

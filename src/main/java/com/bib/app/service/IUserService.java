@@ -1,6 +1,5 @@
 package com.bib.app.service;
 
-import com.bib.app.entities.Cohort;
 import com.bib.app.entities.User;
 
 import java.util.List;

@@ -5,14 +5,12 @@ import com.bib.app.entities.Project;
 import com.bib.app.entities.User;
 import com.bib.app.repository.CohortRepository;
 import com.bib.app.repository.ProjectRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Slf4j
-@RequiredArgsConstructor
 @Service
 public class CohortService implements ICohortService {
     

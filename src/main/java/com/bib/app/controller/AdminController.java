@@ -7,8 +7,6 @@ import org.springframework.web.bind.annotation.*;
 import com.bib.app.entities.Admin;
 import com.bib.app.service.AdminService;
 
-import java.util.HashMap;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")

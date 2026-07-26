@@ -13,22 +13,15 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.AuthenticationFailureHandler;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.bib.app.service.MyUserDetailService;
-
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 @EnableWebSecurity
@@ -42,13 +35,15 @@ public class SecurityConfig {
         return userDetailService; 
     } 
     
-    @Bean 
-    public AuthenticationProvider authenticationProvider() { 
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(); 
-        provider.setUserDetailsService(userDetailService); 
-        provider.setPasswordEncoder(passwordEncoder()); 
-        return provider; 
-    } 
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider provider =
+                new DaoAuthenticationProvider(userDetailService);
+
+        provider.setPasswordEncoder(passwordEncoder());
+
+        return provider;
+    }
     
     @Bean 
     public PasswordEncoder passwordEncoder() { 

@@ -19,12 +19,12 @@ You should receive a response within 48 hours. Please include:
 - Steps to reproduce
 - Potential impact
 
-## Scanning
+## Automated Scanning
 
-This repository is scanned automatically on every push/merge request using:
-- Gitleaks (secret detection)
-- Semgrep (SAST)
-- Snyk (dependency/SCA)
-- Hadolint (Dockerfile linting)
-- Trivy & Grype (container image scanning)
-- Syft (SBOM generation)
+This repository is scanned on every push and merge request using:
+- **Gitleaks** — secret detection
+- **Semgrep** — static application security testing (SAST)
+- **Snyk** — dependency / software composition analysis (SCA)
+- **Hadolint** — Dockerfile linting
+- **Trivy & Grype** — container image vulnerability scanning
+- **Syft** — SBOM (Software Bill of Materials) generation

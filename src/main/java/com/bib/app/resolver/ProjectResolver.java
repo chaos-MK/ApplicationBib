@@ -3,20 +3,12 @@ package com.bib.app.resolver;
 import com.bib.app.dto.ProjectDTO;
 import com.bib.app.entities.Project;
 import com.bib.app.repository.ProjectRepository;
-
-import lombok.RequiredArgsConstructor;
-import com.bib.app.repository.ProjectRepository;
-import lombok.RequiredArgsConstructor;
 import java.util.Map;
 import org.springframework.stereotype.Component;
-
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
-@RequiredArgsConstructor
 public class ProjectResolver {
 
 private final ProjectRepository projectRepository;

@@ -1,18 +1,10 @@
 package com.bib.app.controller;
 import com.bib.app.entities.Project;
-import com.bib.app.service.ICohortService;
 import com.bib.app.dto.ProjectDTO;
-import com.bib.app.entities.Company;
-import com.bib.app.resolver.ProjectResolver;
-import com.bib.app.service.ICompanyService;
 import com.bib.app.service.IProjectService;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.net.URI;
 import java.util.List;
@@ -79,7 +71,7 @@ private final IProjectService projectService ;
         }
         }
 
-    @GetMapping
+    @GetMapping("/getall")
     public ResponseEntity<?> getAllProject() {
         try {
             List<ProjectDTO> projects = projectService.getAllProject();
