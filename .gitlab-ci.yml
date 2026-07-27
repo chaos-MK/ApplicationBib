@@ -50,11 +50,10 @@ sast-semgrep:
 sonarqube:
   stage: sast
   image: maven:3.9-eclipse-temurin-21
-  needs: ["build-test"]
   variables:
     SONAR_HOST_URL: "https://sonarcloud.io"
   script:
-    - mvn compile sonar:sonar -Dsonar.token=$SONAR_TOKEN
+    - mvn clean verify -DskipTests sonar:sonar -Dsonar.token=$SONAR_TOKEN
 
 # -----------------------------------------------------------------------------
 # STAGE 3 — DEPENDENCY / SCA (Software Composition Analysis)
