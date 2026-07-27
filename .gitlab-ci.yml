@@ -34,6 +34,15 @@ sast-semgrep:
   script:
     - pip install semgrep
     - semgrep scan --config p/java --error
+    
+sonarqube:
+  stage: sast
+  image: maven:3.9-eclipse-temurin-21
+  variables:
+    SONAR_HOST_URL: "https://sonarcloud.io"
+  script:
+    - mvn verify sonar:sonar -Dsonar.token=$SONAR_TOKEN
+  allow_failure: false
 
 # ---------- 3. DEPENDENCY / SCA ----------
 dependency-scan-snyk:
