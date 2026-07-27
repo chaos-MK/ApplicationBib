@@ -84,7 +84,7 @@ build-test:
     SPRING_DATASOURCE_USERNAME: test
     SPRING_DATASOURCE_PASSWORD: test
   script:
-    - mvn -B verify
+    - mvn -B verify || (cat target/surefire-reports/*.txt; exit 1)
   artifacts:
     when: always
     reports:
