@@ -208,7 +208,7 @@ smoke-test:
     - apt-get install -y docker.io
 
   script:
-    - pip install -r requirements.txt
+    - pip install -r tests/requirements.txt
 
     - docker network create testnet
 
