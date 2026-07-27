@@ -60,7 +60,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 // Public endpoints - order matters!
                 .requestMatchers("/login", "/logout", "/error").permitAll()
-                .requestMatchers("/cohort/**", "/project/**", "/company/**", "/users/**","/session/**").permitAll()
+                .requestMatchers("/actuator/health", "/cohort/**", "/project/**", "/company/**", "/users/**","/session/**").permitAll()
                 .requestMatchers(
                     "/swagger-ui/**",
                     "/v3/api-docs/**",
