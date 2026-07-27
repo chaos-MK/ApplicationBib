@@ -1,40 +1,52 @@
-# .gitlab-ci.yml
-
 stages:
   - secrets
   - sast
   - dependency
+  - test
   - lint
   - build
   - sbom
   - image-scan
+  - smoke-test
+  - deploy
 
-# Controls WHEN the whole pipeline runs at all (applies to every job below)
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
 
 variables:
-  GIT_DEPTH: 0   # full history — needed for Gitleaks to catch old leaked secrets
+  GIT_DEPTH: 0   # full git history, needed so Gitleaks can catch old leaked secrets
 
-# ---------- 1. SECRETS ----------
+# -----------------------------------------------------------------------------
+# STAGE 1 — SECRETS
+# Scans every commit for hardcoded passwords, API keys, tokens, etc.
+# -----------------------------------------------------------------------------
 secret-scan:
   stage: secrets
   image:
     name: zricethezav/gitleaks:latest
-    entrypoint: [""]
+    entrypoint: [""]   # this image's default entrypoint is the gitleaks binary itself,
+                        # which breaks GitLab's script runner — override it with a shell
   script:
     - gitleaks detect --source . --verbose --redact
 
-# ---------- 2. SAST ----------
+# -----------------------------------------------------------------------------
+# STAGE 2a — SAST (Static Application Security Testing)
+# Analyzes your Java source code for security bug patterns (SQL injection,
+# hardcoded crypto, unsafe deserialization, etc.) without running the app.
+# -----------------------------------------------------------------------------
 sast-semgrep:
   stage: sast
-  image: python:3.12-slim
+  image: python:3.12-slim   # installed via pip instead of Docker image — avoids
+                             # semgrep's Docker-in-Docker volume-mount requirement
   script:
     - pip install semgrep
     - semgrep scan --config p/java --error
-    
+
+# -----------------------------------------------------------------------------
+# STAGE 2b — SonarQube (also SAST, broader code-quality + security rules)
+# -----------------------------------------------------------------------------
 sonarqube:
   stage: sast
   image: maven:3.9-eclipse-temurin-21
@@ -42,19 +54,50 @@ sonarqube:
     SONAR_HOST_URL: "https://sonarcloud.io"
   script:
     - mvn verify sonar:sonar -Dsonar.token=$SONAR_TOKEN
-  allow_failure: false
 
-# ---------- 3. DEPENDENCY / SCA ----------
+# -----------------------------------------------------------------------------
+# STAGE 3 — DEPENDENCY / SCA (Software Composition Analysis)
+# Checks every library in pom.xml (and their transitive dependencies) against
+# known CVE databases.
+# -----------------------------------------------------------------------------
 dependency-scan-snyk:
   stage: dependency
-  image:
-    name: snyk/snyk:maven
-    entrypoint: [""]
+  image: snyk/snyk:maven
   script:
     - snyk auth $SNYK_TOKEN
     - snyk test --severity-threshold=high
+    
+# -----------------------------------------------------------------------------
+# STAGE 4 — BUILD & TEST (Maven compile + unit/integration tests, incl. MockMvc)
+# Runs your JUnit/MockMvc tests against a real Postgres service container.
+# -----------------------------------------------------------------------------
+build-test:
+  stage: test
+  image: maven:3.9-eclipse-temurin-21
+  services:
+    postgres:
+      image: postgres:16
+      variables:
+        POSTGRES_USER: test
+        POSTGRES_PASSWORD: test
+        POSTGRES_DB: testdb
+  variables:
+    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/testdb
+    SPRING_DATASOURCE_USERNAME: test
+    SPRING_DATASOURCE_PASSWORD: test
+  script:
+    - mvn -B verify
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - target/surefire-reports/*.xml
 
-# ---------- 4. DOCKERFILE LINT ----------
+# -----------------------------------------------------------------------------
+# STAGE 5 — DOCKERFILE LINT
+# Checks the Dockerfile itself for bad practices (missing USER, wrong layer
+# order, etc.) before we waste time building it.
+# -----------------------------------------------------------------------------
 dockerfile-lint:
   stage: lint
   image:
@@ -63,7 +106,12 @@ dockerfile-lint:
   script:
     - hadolint Dockerfile
 
-# ---------- 5. BUILD & PUSH IMAGE ----------
+# -----------------------------------------------------------------------------
+# STAGE 6 — BUILD & PUSH IMAGE
+# Builds the real Docker image and pushes it to GitLab's Container Registry.
+# Every later stage (SBOM, image-scan, smoke-test) uses this exact image —
+# not source code — so we're testing the real deployable artifact.
+# -----------------------------------------------------------------------------
 build-image:
   stage: build
   image: docker:24
@@ -76,7 +124,11 @@ build-image:
     - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA .
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
 
-# ---------- 6. SBOM ----------
+# -----------------------------------------------------------------------------
+# STAGE 7 — SBOM (Software Bill of Materials)
+# Generates a machine-readable inventory of every dependency in the project —
+# useful for compliance and for answering "are we affected by CVE-XXXX" fast.
+# -----------------------------------------------------------------------------
 sbom-syft:
   stage: sbom
   image: alpine:3.20
@@ -90,7 +142,11 @@ sbom-syft:
       - sbom.json
     expire_in: 30 days
 
-# ---------- 7. CONTAINER IMAGE SCANNING (two scanners, compared) ----------
+# -----------------------------------------------------------------------------
+# STAGE 8 — IMAGE SCANNING
+# Scans the actual built container (OS packages, base image layers) for CVEs —
+# different from dependency-scan, which only checks Java libraries.
+# -----------------------------------------------------------------------------
 image-scan-trivy:
   stage: image-scan
   image:
@@ -99,11 +155,11 @@ image-scan-trivy:
   needs: ["build-image"]
   script:
     - trivy image
-      --username $CI_REGISTRY_USER
-      --password $CI_REGISTRY_PASSWORD
-      --severity CRITICAL,HIGH
-      --exit-code 1
-      $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+        --username $CI_REGISTRY_USER
+        --password $CI_REGISTRY_PASSWORD
+        --severity CRITICAL,HIGH
+        --exit-code 1
+        $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
 
 image-scan-grype:
   stage: image-scan
@@ -119,3 +175,50 @@ image-scan-grype:
     - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
     - docker save $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -o image.tar
     - grype docker-archive:image.tar --fail-on high
+
+# -----------------------------------------------------------------------------
+# STAGE 9 — SMOKE TEST
+# Runs the REAL built image + a real Postgres container, then hits real
+# endpoints over HTTP with pytest. This is the "does the actual shippable
+# thing work" check — catches things unit tests can't see (missing env vars,
+# broken startup, misconfigured container).
+# Fails the pipeline (and blocks deploy) on any 5xx or connection-refused
+# response — i.e. a "dead endpoint".
+# -----------------------------------------------------------------------------
+smoke-test:
+  stage: smoke-test
+  image: docker:24
+  services:
+    - docker:24-dind
+  needs: ["build-image"]
+  script:
+    - apk add --no-cache python3 py3-pip
+    - pip install --break-system-packages -r requirements.txt
+    - docker network create testnet
+    - docker run -d --name pg --network testnet
+        -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=testdb
+        postgres:16
+    - sleep 10
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker run -d --name app --network testnet -p 8080:8080
+        -e SPRING_DATASOURCE_URL=jdbc:postgresql://pg:5432/testdb
+        -e SPRING_DATASOURCE_USERNAME=test -e SPRING_DATASOURCE_PASSWORD=test
+        $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    - sleep 25
+    - pytest tests/test_api.py --junitxml=smoke-report.xml -v
+  artifacts:
+    when: always
+    reports:
+      junit: smoke-report.xml   # renders as a pass/fail table in the GitLab MR UI
+
+# -----------------------------------------------------------------------------
+# STAGE 10 — DEPLOY
+# Only reachable if build-test AND smoke-test both passed. This is the actual
+# security/quality gate — everything before this is validation, this is where
+# a broken build gets physically blocked from reaching production.
+# -----------------------------------------------------------------------------
+deploy:
+  stage: deploy
+  needs: ["build-test", "smoke-test"]
+  script:
+    - echo "deploy steps go here once you pick a target (VPS/AWS/etc.)"
