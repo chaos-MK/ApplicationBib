@@ -191,21 +191,25 @@ image-scan-grype:
 # -----------------------------------------------------------------------------
 smoke-test:
   stage: smoke-test
-
-  image: docker:24
+  image: python:3.12
 
   services:
     - docker:24-dind
 
   variables:
-    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
 
   needs:
     - build-image
 
+  before_script:
+    - apt-get update
+    - apt-get install -y docker.io
+
   script:
-    - apk add --no-cache python3 py3-pip
-    - pip install --break-system-packages -r requirements.txt
+    - pip install -r requirements.txt
+
     - docker network create testnet
 
     - >
@@ -232,6 +236,7 @@ smoke-test:
       "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
     - sleep 25
+
     - pytest tests/test_api.py --junitxml=smoke-report.xml -v
 
   artifacts:
