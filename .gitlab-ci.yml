@@ -236,7 +236,8 @@ smoke-test:
       "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
     - sleep 25
-
+    - docker ps -a
+    - docker logs app || true
     - pytest tests/test_api.py --junitxml=smoke-report.xml -v
 
   artifacts:
