@@ -191,8 +191,7 @@ image-scan-grype:
 # -----------------------------------------------------------------------------
 smoke-test:
   stage: smoke-test
-
-  image: docker:24
+  image: python:3.12
 
   services:
     - docker:24-dind
@@ -205,16 +204,14 @@ smoke-test:
     - build-image
 
   before_script:
-    - apk add --no-cache python3 py3-pip curl
+    - apt-get update
+    - apt-get install -y docker.io
 
   script:
-    # Install pytest
-    - pip3 install -r tests/requirements.txt
+    - pip install -r tests/requirements.txt
 
-    # Create network
     - docker network create testnet
 
-    # Start PostgreSQL
     - >
       docker run -d
       --name pg
@@ -224,54 +221,26 @@ smoke-test:
       -e POSTGRES_DB=testdb
       postgres:16
 
-    # Wait until PostgreSQL is ready
-    - |
-      until docker exec pg pg_isready -U test -d testdb; do
-        echo "Waiting for PostgreSQL..."
-        sleep 2
-      done
+    - sleep 10
 
-    # Login to registry
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
 
-    # Start application
     - >
       docker run -d
       --name app
       --network testnet
+      -p 8080:8080
       -e SPRING_DATASOURCE_URL=jdbc:postgresql://pg:5432/testdb
       -e SPRING_DATASOURCE_USERNAME=test
       -e SPRING_DATASOURCE_PASSWORD=test
       "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
-    # Wait until Spring Boot is ready
-    - |
-      until docker exec app wget -qO- http://localhost:8080/actuator/health >/dev/null 2>&1; do
-        echo "Waiting for Spring Boot..."
-        sleep 5
-      done
-
-    # Run pytest INSIDE the same Docker network
-    - >
-      docker run --rm
-      --network testnet
-      -e BASE_URL=http://app:8080
-      -v "$CI_PROJECT_DIR/tests:/tests"
-      -w /tests
-      python:3.12
-      sh -c "
-        pip install -r requirements.txt &&
-        pytest test_api.py -v --junitxml=smoke-report.xml
-      "
-
-    # Copy report back to GitLab workspace
-    - cp tests/smoke-report.xml .
-
-  after_script:
+    - sleep 25
+    - sleep 30
+    - docker ps -a
     - docker logs app || true
-    - docker logs pg || true
-    - docker rm -f app pg || true
-    - docker network rm testnet || true
+    - pytest tests/test_api.py --junitxml=smoke-report.xml -v
+    - BASE_URL=http://app:8080 pytest tests/test_api.py --junitxml=smoke-report.xml -v
 
   artifacts:
     when: always
