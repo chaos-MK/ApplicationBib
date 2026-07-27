@@ -1,7 +1,8 @@
-import requests
+import os
 import pytest
+import requests
 
-BASE_URL = "http://localhost:8080"
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8080")
 
 ENDPOINTS = [
     "/project/getall",

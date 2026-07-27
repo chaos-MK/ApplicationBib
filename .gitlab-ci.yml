@@ -235,10 +235,10 @@ smoke-test:
       -e SPRING_DATASOURCE_PASSWORD=test
       "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
-    - sleep 25
+    - sleep 30
     - docker ps -a
     - docker logs app || true
-    - pytest tests/test_api.py --junitxml=smoke-report.xml -v
+    - BASE_URL=http://app:8080 pytest tests/test_api.py --junitxml=smoke-report.xml -v
 
   artifacts:
     when: always
