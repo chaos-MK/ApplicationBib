@@ -173,6 +173,32 @@ RUN apk update && apk upgrade --no-cache && \
 **Status:** Fixed — Trivy and Grype both pass at `--fail-on high` threshold.
 
 
+## Finding #004 — False Positive: Gitleaks flagged sonar.projectKey as a secret
+
+**Date:** 2026-07-27
+**Tool that found it:** Gitleaks
+**Severity:** N/A (false positive)
+
+### Risk
+None. Gitleaks' `generic-api-key` rule matched `sonar.projectKey=...` in
+`sonar-project.properties` purely due to the substring "key" combined with
+high entropy in the value. `projectKey` is a public SonarCloud project
+identifier, not a credential — it is also visible in the SonarCloud
+dashboard URL itself.
+
+### What I did
+1. Verified the flagged value was not sensitive (project identifier, not
+   an API token or password).
+2. Added the specific finding fingerprint to `.gitleaksignore` rather than
+   disabling the Gitleaks job or excluding the whole file, so real secrets
+   in this file (if ever added) would still be caught.
+
+### What changed
+- Added `.gitleaksignore` with the specific finding fingerprint.
+
+**Status:** Resolved (documented false positive)
+
+
 ## Summary
 
 | Finding | CVEs/Issues Covered | Tool | Status |
@@ -180,3 +206,4 @@ RUN apk update && apk upgrade --no-cache && \
 | #001 | 38 | Snyk | ✅ Fixed |
 | #002 | 19 | Snyk | ✅ Fixed |
 | #003 | OS-level (2 High + hardening) | Trivy, Grype | ✅ Fixed |
+| #004 | False positive | Gitleaks | ✅ Resolved |
