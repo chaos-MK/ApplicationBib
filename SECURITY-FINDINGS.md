@@ -1,7 +1,7 @@
 # Security Findings Log
 
 This log documents vulnerabilities identified by automated security scanning
-in the GitLab CI/CD pipeline (Gitleaks, Semgrep, Snyk, Hadolint, Trivy, Grype,
+in the GitLab CI/CD pipeline (Gitleaks, Semgrep, Sonarqube, Snyk, Hadolint, Trivy, Grype,
 Syft), and the remediation applied for each.
 
 ---
