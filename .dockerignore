@@ -1,0 +1,8 @@
+target/
+.git/
+.gitleaksignore
+*.md
+.mvn/
+sbom.json
+image.tar
+*.log
