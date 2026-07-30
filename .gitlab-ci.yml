@@ -162,7 +162,9 @@ image-scan-trivy:
 image-scan-grype:
   stage: image-scan
 
-  image: quay.io/skopeo/stable
+  image:
+    name: quay.io/skopeo/stable
+    entrypoint: [""]
 
   needs:
     - build-image
@@ -249,7 +251,16 @@ deploy:
   stage: deploy
 
   needs:
+    - secret-scan
+    - sast-semgrep
+    - sonarqube
+    - dependency-scan-snyk
     - build-test
+    - dockerfile-lint
+    - build-image
+    - sbom-syft
+    - image-scan-trivy
+    - image-scan-grype
     - smoke-test
 
   script:
