@@ -199,6 +199,55 @@ dashboard URL itself.
 **Status:** Resolved (documented false positive)
 
 
+## Finding #005 — High: Transitive dependency CVEs introduced by HashiCorp Vault integration
+
+**Date:** 2026-07-30
+**Tool that found it:** Snyk
+**Severity:** High (4 findings)
+**Package:** org.springframework.cloud:spring-cloud-starter-vault-config
+
+### Risk
+Adding `spring-cloud-starter-vault-config` to integrate HashiCorp Vault
+introduced two vulnerable transitive dependencies:
+
+- `org.apache.httpcomponents.core5:httpcore5-h2@5.3.6`
+  - Allocation of Resources Without Limits or Throttling
+  - SNYK-JAVA-ORGAPACHEHTTPCOMPONENTSCORE5-17817217
+  - SNYK-JAVA-ORGAPACHEHTTPCOMPONENTSCORE5-17817218
+- `org.bouncycastle:bcprov-jdk18on@1.81.1`
+  - Timing Attack
+  - Use of a Broken or Risky Cryptographic Algorithm
+  - SNYK-JAVA-ORGBOUNCYCASTLE-16074612
+  - SNYK-JAVA-ORGBOUNCYCASTLE-16075266
+
+The application did not depend on either library directly; both were pulled
+in transitively by the Vault starter. Without intervention, the vulnerable
+versions would continue to be resolved during the Maven build.
+
+### What I did
+1. Used the Snyk report to identify the vulnerable transitive dependency
+   chain introduced by `spring-cloud-starter-vault-config`.
+2. Added explicit version overrides in `<dependencyManagement>` so Maven
+   resolves the patched releases instead of the vulnerable transitive
+   versions.
+3. Upgraded:
+   - `httpcore5-h2` from `5.3.6` to `5.4.3`
+   - `bcprov-jdk18on` from `1.81.1` to `1.84`
+4. Ran `./mvnw clean verify` to ensure the dependency overrides introduced
+   no compatibility issues.
+5. Re-ran `snyk test --severity-threshold=high` and confirmed all four
+   High-severity findings were resolved.
+
+### What changed
+- `pom.xml`
+  - Added `<dependencyManagement>` override:
+    - `org.apache.httpcomponents.core5:httpcore5-h2` → `5.4.3`
+    - `org.bouncycastle:bcprov-jdk18on` → `1.84`
+
+**Status:** Fixed — Snyk reports 0 findings at `--severity-threshold=high`.
+
+
+
 ## Summary
 
 | Finding | CVEs/Issues Covered | Tool | Status |
@@ -207,3 +256,4 @@ dashboard URL itself.
 | #002 | 19 | Snyk | ✅ Fixed |
 | #003 | OS-level (2 High + hardening) | Trivy, Grype | ✅ Fixed |
 | #004 | False positive | Gitleaks | ✅ Resolved |
+| #005 | 4 | Snyk | ✅ Fixed |
