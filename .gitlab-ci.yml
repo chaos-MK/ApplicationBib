@@ -235,11 +235,17 @@ smoke-test:
       docker run -d
       --name app
       --network testnet
+      --read-only
+      --tmpfs /tmp
+      --cap-drop=ALL
+      --memory=512m
+      --cpus=1
       -p 8080:8080
       -e SPRING_DATASOURCE_URL=jdbc:postgresql://pg:5432/testdb
       -e SPRING_DATASOURCE_USERNAME=test
       -e SPRING_DATASOURCE_PASSWORD=test
       "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+      
 
     # wait for the app to actually be up instead of a blind sleep
     - >
