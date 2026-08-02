@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "postgres"
+        vault.hashicorp.com/agent-inject-secret-db-creds: "secret/data/applicationbib/db"
+        vault.hashicorp.com/agent-inject-template-db-creds: |
+          {{- with secret "secret/data/applicationbib/db" -}}
+          export POSTGRES_DB="{{ .Data.data.url | regexReplaceAll ".*\\/([^\\/]+)$" "${1}" }}"
+          export POSTGRES_USER="{{ .Data.data.username }}"
+          export POSTGRES_PASSWORD="{{ .Data.data.password }}"
+          {{- end -}}
+    spec:
+      serviceAccountName: postgres-sa
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:16
+          command: ["/bin/sh", "-c"]
+          args:
+            - . /vault/secrets/db-creds && exec docker-entrypoint.sh postgres
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc

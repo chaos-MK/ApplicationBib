@@ -1,0 +1,19 @@
+#clusterIP: None is what makes this a headless service — instead of load-balancing across replicas,
+#it gives direct stable DNS to each pod, which is what StatefulSets expect. Since you only have 1
+#replica, the practical effect is: other pods can reach Postgres at
+#postgres.default.svc.cluster.local (or just postgres within the same namespace).
+
+#headless Service — this gives Postgres a stable DNS name (postgres) that other pods (like your
+#Spring Boot app later) can use to reach it, instead of an IP that changes.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
