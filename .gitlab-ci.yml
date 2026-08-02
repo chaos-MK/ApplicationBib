@@ -275,5 +275,5 @@ deploy:
     - git config user.name "CI Deploy Bot"
     - git remote set-url origin "https://ci-deploy-bot:${DEPLOY_TOKEN}@gitlab.com/khalilmohamed798/ApplicationBib.git"
     - git add k8s/app/deployment.yaml
-    - git commit -m "chore: deploy image $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"
+    - 'git commit -m "chore: deploy image $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
     - git push origin HEAD:main
