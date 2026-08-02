@@ -247,9 +247,39 @@ versions would continue to be resolved during the Maven build.
 **Status:** Fixed — Snyk reports 0 findings at `--severity-threshold=high`.
 
 
+## Finding #006 — Rootless Podman incompatible with kube-proxy Service networking
+
+**Date:** 2026-08-02
+**Component:** Kubernetes (minikube)
+**Severity:** Blocking (functional, not a vulnerability)
+**Status:** Resolved via documented trade-off
+
+While deploying Vault + Postgres into minikube (Podman driver, rootless),
+pod-to-Service networking failed entirely — direct pod-to-pod IP traffic
+worked, but ClusterIP-based Service routing timed out consistently. Root
+cause: kube-proxy's iptables-based Service routing requires elevated
+netfilter/NAT privileges (CAP_NET_ADMIN and access to the host's iptables
+tables) that rootless Podman deliberately restricts. kube-proxy logs showed
+it starting without error, but Service DNAT rules were not being applied
+correctly in this context.
+
+**Decision:** Ran minikube rootful (`sudo minikube start --driver=podman
+--force`) instead of rootless. This grants kube-proxy the privileges it
+needs to manage iptables normally.
+
+**Trade-off accepted:** the minikube node itself runs with root privileges
+on the host. This does NOT affect application pod security — all
+application containers still run as non-root (see Dockerfile hardening,
+Finding context above) via Pod-level `runAsNonRoot`/numeric UID. This is a
+known, common trade-off in the Kubernetes ecosystem — fully rootless
+Kubernetes networking remains an actively evolving area, and many
+production kubeadm-based clusters run kube-proxy privileged by design.
+Alternative rootless-compatible CNIs (e.g. Cilium in eBPF mode) exist but
+were not evaluated further, given local/single-node scope of this project.
+
+
 
 ## Summary
-
 | Finding | CVEs/Issues Covered | Tool | Status |
 |---|---|---|---|
 | #001 | 38 | Snyk | ✅ Fixed |
@@ -257,3 +287,4 @@ versions would continue to be resolved during the Maven build.
 | #003 | OS-level (2 High + hardening) | Trivy, Grype | ✅ Fixed |
 | #004 | False positive | Gitleaks | ✅ Resolved |
 | #005 | 4 | Snyk | ✅ Fixed |
+| #006 | 1 (functional/architectural) | Manual (kube-proxy/minikube) | ✅ Resolved (documented trade-off) |
