@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: applicationbib
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: applicationbib
+  template:
+    metadata:
+      labels:
+        app: applicationbib
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry-secret
+      containers:
+        - name: applicationbib
+          image: registry.gitlab.com/khalilmohamed798/applicationbib:bf8960fe
+          ports:
+            - containerPort: 8080
