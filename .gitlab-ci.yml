@@ -249,6 +249,10 @@ smoke-test:
 # -----------------------------------------------------------------------------
 deploy:
   stage: deploy
+  tags:
+    - local-k8s
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
 
   needs:
     - secret-scan
@@ -264,4 +268,12 @@ deploy:
     - smoke-test
 
   script:
-    - echo "Deploy goes here."
+    - sed -i "s|image: registry.gitlab.com/khalilmohamed798/applicationbib:.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|" k8s/app/deployment.yaml
+    - sudo /usr/local/bin/kubectl apply -f k8s/app/deployment.yaml
+    - sudo /usr/local/bin/kubectl rollout status deployment/applicationbib --timeout=120s
+    - git config user.email "ci-bot@applicationbib.local"
+    - git config user.name "CI Deploy Bot"
+    - git remote set-url origin "https://ci-deploy-bot:${DEPLOY_TOKEN}@gitlab.com/khalilmohamed798/ApplicationBib.git"
+    - git add k8s/app/deployment.yaml
+    - git commit -m "chore: deploy image $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"
+    - git push origin HEAD:main

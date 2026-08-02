@@ -17,7 +17,7 @@ spec:
         - name: gitlab-registry-secret
       containers:
         - name: applicationbib
-          image: registry.gitlab.com/khalilmohamed798/applicationbib:bf8960fe
+          image: registry.gitlab.com/khalilmohamed798/applicationbib:49a78acc
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: "k8s"
