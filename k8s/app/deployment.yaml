@@ -12,10 +12,14 @@ spec:
       labels:
         app: applicationbib
     spec:
+      serviceAccountName: applicationbib-sa
       imagePullSecrets:
         - name: gitlab-registry-secret
       containers:
         - name: applicationbib
           image: registry.gitlab.com/khalilmohamed798/applicationbib:bf8960fe
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "k8s"
           ports:
             - containerPort: 8080
