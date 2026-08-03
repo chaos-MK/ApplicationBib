@@ -247,7 +247,46 @@ versions would continue to be resolved during the Maven build.
 **Status:** Fixed — Snyk reports 0 findings at `--severity-threshold=high`.
 
 
-## Finding #006 — Rootless Podman incompatible with kube-proxy Service networking
+## Finding #006 — Non-numeric USER instruction in Dockerfile (DL3066)
+
+**Date:** 2026-07-31
+**Tool that found it:** Hadolint
+**Severity:** Info (pipeline blocking)
+**Rule:** DL3066
+
+### Risk
+Hadolint flagged the Dockerfile because it used a named user (`USER app`)
+instead of a numeric UID. While the container still ran as a non-root user,
+named accounts are not guaranteed to resolve consistently across different
+host environments and do not map predictably to Kubernetes Pod Security
+Standards, which commonly enforce `runAsNonRoot` with a numeric UID.
+
+### What I did
+1. Created the application group and user with explicit numeric IDs:
+   - Group: `1001`
+   - User: `1001`
+2. Updated the Dockerfile to reference the numeric UID directly:
+   `USER 1001`.
+3. Rebuilt the container image and re-ran Hadolint to confirm the warning
+   was resolved.
+
+### What changed
+- `Dockerfile`
+  - Replaced:
+    ```dockerfile
+    USER app
+    ```
+  - With:
+    ```dockerfile
+    RUN addgroup -S -g 1001 app && \
+        adduser -S -u 1001 -G app app
+    USER 1001
+    ```
+
+**Status:** Fixed — Hadolint passes without DL3066.
+
+
+## Finding #007 — Rootless Podman incompatible with kube-proxy Service networking
 
 **Date:** 2026-08-02
 **Component:** Kubernetes (minikube)
@@ -287,4 +326,5 @@ were not evaluated further, given local/single-node scope of this project.
 | #003 | OS-level (2 High + hardening) | Trivy, Grype | ✅ Fixed |
 | #004 | False positive | Gitleaks | ✅ Resolved |
 | #005 | 4 | Snyk | ✅ Fixed |
-| #006 | 1 (functional/architectural) | Manual (kube-proxy/minikube) | ✅ Resolved (documented trade-off) |
+| #006 | 1 | Hadolint | ✅ Fixed |
+| #007 | 1 (functional/architectural) | Manual (kube-proxy/minikube) | ✅ Resolved (documented trade-off) |
