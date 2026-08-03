@@ -11,8 +11,8 @@ FROM docker.io/library/eclipse-temurin:21-jre-alpine@sha256:3f08b13888f595cc49ed
 RUN apk update && apk upgrade --no-cache && \
     apk del --no-cache gnupg gnupg-dirmngr gnupg-gpgconf gnupg-keyboxd gnupg-utils gnupg-wks-client gpg gpg-agent gpg-wks-server gpgsm gpgv 2>/dev/null || true
 WORKDIR /app
-RUN addgroup -S -g 1001 app && adduser -S -u 1001 -G app app
+RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app
 COPY --from=build /app/target/*.jar app.jar
-USER 1001
+USER 10001
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

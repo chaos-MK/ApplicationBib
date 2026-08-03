@@ -286,7 +286,22 @@ Standards, which commonly enforce `runAsNonRoot` with a numeric UID.
     USER 1001
     ```
 
-**Status:** Fixed — Hadolint passes without DL3066.
+### Update — 2026-08-03
+UID/GID bumped from 1001 to 10001. kube-score (Finding #008) flagged 1001
+as too close to the host's real user-account range (typically starting
+around UID 1000), risking accidental permission overlap in a container
+isolation-failure scenario. 10001 keeps the container non-root while
+sitting safely outside that range.
+
+`Dockerfile`:
+```dockerfile
+RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app
+USER 10001
+```
+`k8s/app/deployment.yaml` `securityContext.runAsUser`/`runAsGroup` updated
+to `10001` to match.
+
+**Status:** Fixed — Hadolint passes without DL3066. UID hardened further to 10001 on 2026-08-03 (see update above).
 
 
 ## Finding #007 — Rootless Podman incompatible with kube-proxy Service networking
@@ -366,11 +381,11 @@ Deployment runs with a single replica.
 
 ### Accepted trade-offs
 
-- kube-score recommends UIDs above 10000. The application keeps UID 1001,
-  matching the hardened Docker image (Finding #006). PostgreSQL continues using
-  the upstream startup model described above.
 - PostgreSQL keeps `readOnlyRootFilesystem: false` because it legitimately
   writes temporary files and Unix sockets outside the mounted data volume.
+  PostgreSQL also continues running as root at container start (upstream
+  image design — see above); UID hardening above 10000 was not pursued for
+  PostgreSQL for this reason.
 - The Deployment continues running a single replica because high availability
   is outside the scope of this local portfolio project.
 
