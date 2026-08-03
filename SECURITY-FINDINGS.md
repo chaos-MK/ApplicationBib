@@ -252,26 +252,42 @@ versions would continue to be resolved during the Maven build.
 
 ## Finding #006 — Non-numeric USER instruction in Dockerfile (DL3066)
 
-**Date:** 2026-07-31
+**Date:** 2026-07-31 (updated 2026-08-03)
 **Tool that found it:** Hadolint
 **Severity:** Info (pipeline blocking)
 **Rule:** DL3066
 
 ### Risk
 Hadolint flagged the Dockerfile because it used a named user (`USER app`)
-instead of a numeric UID. While the container still ran as a non-root user,
-named accounts are not guaranteed to resolve consistently across different
-host environments and do not map predictably to Kubernetes Pod Security
-Standards, which commonly enforce `runAsNonRoot` with a numeric UID.
+instead of a numeric UID. Although the container already ran as a non-root
+user, named accounts are not guaranteed to resolve consistently across
+different host environments and do not map predictably to Kubernetes Pod
+Security Standards, which commonly enforce `runAsNonRoot` with an explicit
+numeric UID.
+
+During subsequent Kubernetes hardening, kube-score also identified that the
+initial UID (`1001`) was too close to the host's typical user-account range
+(starting around UID 1000), increasing the risk of accidental permission
+overlap in the unlikely event of a container isolation failure.
 
 ### What I did
-1. Created the application group and user with explicit numeric IDs:
-   - Group: `1001`
-   - User: `1001`
-2. Updated the Dockerfile to reference the numeric UID directly:
-   `USER 1001`.
-3. Rebuilt the container image and re-ran Hadolint to confirm the warning
-   was resolved.
+1. Created the application group and user with explicit numeric IDs instead
+   of relying on a username.
+2. Updated the Dockerfile to reference the numeric UID directly.
+3. Rebuilt the container image and re-ran Hadolint to confirm DL3066 was
+   resolved.
+4. During Kubernetes hardening, increased the UID/GID from `1001` to
+   `10001` following kube-score's recommendation, keeping the container
+   non-root while moving outside the host's normal user-ID range.
+5. Updated `securityContext.runAsUser` and `runAsGroup` in
+   `k8s/app/deployment.yaml` to match the new UID/GID.
+6. While rolling out the hardened configuration, identified that enabling
+   `readOnlyRootFilesystem: true` caused the application to crash because
+   embedded Tomcat requires a writable temporary directory (`/tmp`) during
+   startup.
+7. Mounted a dedicated `emptyDir` volume at `/tmp`, allowing Tomcat to
+   create its temporary files without relaxing the read-only root
+   filesystem elsewhere in the container.
 
 ### What changed
 - `Dockerfile`
@@ -281,27 +297,19 @@ Standards, which commonly enforce `runAsNonRoot` with a numeric UID.
     ```
   - With:
     ```dockerfile
-    RUN addgroup -S -g 1001 app && \
-        adduser -S -u 1001 -G app app
-    USER 1001
+    RUN addgroup -S -g 10001 app && \
+        adduser -S -u 10001 -G app app
+    USER 10001
     ```
+- `k8s/app/deployment.yaml`
+  - Updated `securityContext.runAsUser` and `runAsGroup` to `10001`.
+  - Added an `emptyDir` volume mounted at `/tmp` to support
+    `readOnlyRootFilesystem: true`.
 
-### Update — 2026-08-03
-UID/GID bumped from 1001 to 10001. kube-score (Finding #008) flagged 1001
-as too close to the host's real user-account range (typically starting
-around UID 1000), risking accidental permission overlap in a container
-isolation-failure scenario. 10001 keeps the container non-root while
-sitting safely outside that range.
-
-`Dockerfile`:
-```dockerfile
-RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app
-USER 10001
-```
-`k8s/app/deployment.yaml` `securityContext.runAsUser`/`runAsGroup` updated
-to `10001` to match.
-
-**Status:** Fixed — Hadolint passes without DL3066. UID hardened further to 10001 on 2026-08-03 (see update above).
+**Status:** Fixed — Hadolint passes without DL3066. UID/GID hardened to
+`10001`, and the Tomcat startup issue introduced during the security
+hardening rollout was resolved by providing a dedicated writable `/tmp`
+volume while keeping the root filesystem read-only.
 
 
 ## Finding #007 — Rootless Podman incompatible with kube-proxy Service networking
@@ -445,7 +453,7 @@ result, any pod in the cluster could reach Vault, including its API on port
 | #003 | OS-level (2 High + hardening) | Trivy, Grype | ✅ Fixed |
 | #004 | False positive | Gitleaks | ✅ Resolved |
 | #005 | 4 | Snyk | ✅ Fixed |
-| #006 | 1 | Hadolint | ✅ Fixed |
+| #006 | 1 (+ 2 follow-ups: UID hardening, readOnlyRootFilesystem rollout fix) | Hadolint, kube-score | ✅ Fixed |
 | #007 | 1 (functional/architectural) | Manual (kube-proxy/minikube) | ✅ Resolved (documented trade-off) |
 | #008 | 8 (7 Critical + 1 Warning) | kube-score | ✅ Fixed (Warning accepted as project scope) |
 | #009 | 1 | Manual architectural review | ✅ Fixed |
