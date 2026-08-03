@@ -1,8 +1,11 @@
 # Security Findings Log
 
-This log documents vulnerabilities identified by automated security scanning
-in the GitLab CI/CD pipeline (Gitleaks, Semgrep, Sonarqube, Snyk, Hadolint, Trivy, Grype,
-Syft), and the remediation applied for each.
+This log documents security and reliability findings identified by
+automated scanning tools (Gitleaks, Semgrep, SonarQube, Snyk, Hadolint,
+Trivy, Grype, Syft, kube-score) and manual architectural review, along
+with the remediation applied for each. Most tools run automatically in
+the GitLab CI/CD pipeline; some (e.g. kube-score) are currently run
+manually and may be added to CI later.
 
 ---
 
@@ -317,6 +320,107 @@ Alternative rootless-compatible CNIs (e.g. Cilium in eBPF mode) exist but
 were not evaluated further, given local/single-node scope of this project.
 
 
+## Finding #008 — Missing Kubernetes manifest hardening (resources, security context, probes, network policy)
+
+**Date:** 2026-08-03
+**Tool that found it:** kube-score
+**Severity:** Critical (7 categories) + Warning (1)
+**Manifests affected:** `k8s/app/deployment.yaml`, `k8s/postgres/statefulset.yaml`
+
+### Risk
+
+A baseline kube-score scan identified seven Critical hardening issues affecting
+both workload manifests (application Deployment and PostgreSQL StatefulSet):
+missing CPU/memory/ephemeral-storage resource requests and limits, missing
+container security contexts, `imagePullPolicy` not explicitly set to `Always`,
+missing readiness probes, and no NetworkPolicies protecting either workload.
+
+Additionally, kube-score reported one Warning because the application
+Deployment runs with a single replica.
+
+### What I did
+
+1. Added CPU, memory, and ephemeral-storage resource requests and limits to
+   both containers.
+2. Added Kubernetes security contexts:
+   - **Application:** enforced `runAsNonRoot`, `runAsUser: 1001`,
+     `runAsGroup: 1001`, `readOnlyRootFilesystem: true`,
+     `allowPrivilegeEscalation: false`, and `capabilities.drop: [ALL]`.
+   - **PostgreSQL:** added `allowPrivilegeEscalation: false` and
+     `capabilities.drop: [ALL]`. `runAsUser` was intentionally left unset after
+     verifying that the official PostgreSQL image starts as root to perform
+     ownership initialization before dropping privileges internally to UID 999
+     via `gosu`. Forcing `runAsUser: 999` would bypass that initialization step
+     and could prevent the database from starting correctly.
+3. Set `imagePullPolicy: Always` on both workloads.
+4. Added readiness probes:
+   - Application: HTTP probe against `/actuator/health`.
+   - PostgreSQL: `pg_isready -U postgres`.
+5. Added NetworkPolicies:
+   - Application ingress left open (`ingress: [{}]`) to allow future frontend
+     access.
+   - Application egress restricted to PostgreSQL (5432), Vault (8200), and DNS
+     (53).
+   - PostgreSQL ingress restricted to the application only.
+   - PostgreSQL egress restricted to Vault (8200) and DNS (53).
+
+### Accepted trade-offs
+
+- kube-score recommends UIDs above 10000. The application keeps UID 1001,
+  matching the hardened Docker image (Finding #006). PostgreSQL continues using
+  the upstream startup model described above.
+- PostgreSQL keeps `readOnlyRootFilesystem: false` because it legitimately
+  writes temporary files and Unix sockets outside the mounted data volume.
+- The Deployment continues running a single replica because high availability
+  is outside the scope of this local portfolio project.
+
+### What changed
+
+- `k8s/app/deployment.yaml`
+- `k8s/app/networkpolicy.yaml`
+- `k8s/postgres/statefulset.yaml`
+- `k8s/postgres/networkpolicy.yaml`
+
+**Status:** Fixed — all Critical kube-score findings remediated or explicitly
+documented as accepted design trade-offs. The single-replica warning is
+accepted for project scope.
+
+
+## Finding #009 — Vault server missing NetworkPolicy
+
+**Date:** 2026-08-03
+**Tool that found it:** Manual architectural review
+**Severity:** Critical
+
+### Risk
+
+While implementing NetworkPolicies for the application and PostgreSQL, a manual
+review identified that the Vault server had no NetworkPolicy applied. As a
+result, any pod in the cluster could reach Vault, including its API on port
+8200, despite Vault storing the application's database credentials.
+
+### What I did
+
+1. Verified the Vault server labels using
+   `kubectl get pods -n vault --show-labels`.
+2. Confirmed the server pod uses
+   `app.kubernetes.io/name=vault` and `component=server`.
+3. Created `k8s/vault/networkpolicy.yaml`.
+4. Restricted ingress to the Vault server so only workloads from the
+   `default` namespace can access TCP port 8200.
+5. Left the Vault Agent Injector untouched to avoid disrupting admission
+   webhook traffic.
+6. Applied the policy and confirmed the application still reports
+   `/actuator/health` as `UP`, verifying Vault-based secret injection
+   continues to function correctly.
+
+### What changed
+
+- `k8s/vault/networkpolicy.yaml`
+
+**Status:** Fixed
+
+
 
 ## Summary
 | Finding | CVEs/Issues Covered | Tool | Status |
@@ -328,3 +432,5 @@ were not evaluated further, given local/single-node scope of this project.
 | #005 | 4 | Snyk | ✅ Fixed |
 | #006 | 1 | Hadolint | ✅ Fixed |
 | #007 | 1 (functional/architectural) | Manual (kube-proxy/minikube) | ✅ Resolved (documented trade-off) |
+| #008 | 8 (7 Critical + 1 Warning) | kube-score | ✅ Fixed (Warning accepted as project scope) |
+| #009 | 1 | Manual architectural review | ✅ Fixed |

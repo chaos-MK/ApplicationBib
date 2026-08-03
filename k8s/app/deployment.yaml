@@ -15,11 +15,37 @@ spec:
       serviceAccountName: applicationbib-sa
       imagePullSecrets:
         - name: gitlab-registry-secret
+
       containers:
         - name: applicationbib
           image: registry.gitlab.com/khalilmohamed798/applicationbib:da99f830
+          imagePullPolicy: Always
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: "k8s"
           ports:
             - containerPort: 8080
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "384Mi"
+              ephemeral-storage: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "768Mi"
+              ephemeral-storage: "512Mi"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
