@@ -493,6 +493,57 @@ so even if the token were exfiltrated, it authenticates to Vault only
 **Status:** Resolved (reverted change; documented as architectural constraint).
 
 
+## Finding #011 — Critical/High: Newly disclosed Bouncy Castle CVEs introduced by Spring Cloud Vault dependency update
+
+**Date:** 2026-08-04
+**Tool that found it:** Snyk
+**Severity:** Critical + High (4 findings)
+**Package:** org.springframework.cloud:spring-cloud-starter-vault-config
+
+### Risk
+
+Following an update of `spring-cloud-starter-vault-config`, Snyk identified
+four newly disclosed vulnerabilities in the transitive dependency
+`org.bouncycastle:bcprov-jdk18on@1.84`, which is pulled in through
+`spring-cloud-starter`.
+
+The affected version contained:
+
+- Improper Certificate Validation (Critical)
+- Improper Input Validation (Critical)
+- Memory Allocation with Excessive Size Value (High)
+- Inadequate Encryption Strength (High)
+
+The application does not use Bouncy Castle directly; the vulnerable version
+was resolved transitively by Maven through the Vault starter. As a result,
+the project inherited newly published vulnerabilities despite having no
+application code changes related to cryptography.
+
+### What I did
+
+1. Used the Snyk dependency tree to verify the vulnerable package was
+   introduced transitively by `spring-cloud-starter-vault-config`.
+2. Reviewed the Snyk advisories and confirmed all four vulnerabilities are
+   fixed in `bcprov-jdk18on` version `1.85`.
+3. Updated the existing `<dependencyManagement>` override to force Maven to
+   resolve `bcprov-jdk18on` version `1.85` instead of the vulnerable
+   transitive version.
+4. Ran `./mvnw clean verify` to confirm the dependency update introduced no
+   compatibility issues.
+5. Re-ran `snyk test --severity-threshold=high` and confirmed all four
+   findings were resolved.
+
+### What changed
+
+- `pom.xml`
+  - Updated `<dependencyManagement>` override:
+    - `org.bouncycastle:bcprov-jdk18on`:
+      `1.84` → `1.85`
+
+**Status:** Fixed — Snyk reports 0 findings related to
+`bcprov-jdk18on` after forcing version `1.85`.
+
+
 
 ## Summary
 | Finding | CVEs/Issues Covered | Tool | Status |
@@ -507,3 +558,4 @@ so even if the token were exfiltrated, it authenticates to Vault only
 | #008 | 8 (7 Critical + 1 Warning) | kube-score | ✅ Fixed (Warning accepted as project scope) |
 | #009 | 1 | Manual architectural review | ✅ Fixed |
 | #010 | Architectural security constraint (Vault Kubernetes auth) | RBAC review | ✅ Documented |
+| #011 | 4 (2 Critical + 2 High) | Snyk | ✅ Fixed |
