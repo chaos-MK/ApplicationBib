@@ -13,6 +13,8 @@ spec:
       labels:
         app: postgres
       annotations:
+        # UID/GID and readOnlyRootFilesystem trade-offs documented in
+        # Finding #008 — suppressed here now that kube-score runs in CI
         kube-score/ignore: container-security-context-user-group-id,container-security-context-readonlyrootfilesystem
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/role: "postgres"
