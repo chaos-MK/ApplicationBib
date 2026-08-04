@@ -12,7 +12,7 @@ stages:
   - pre-deploy-checks
   - deploy
   - post-deploy-smoke
-  - dast
+  - dast-scan
   - rollback
 
 workflow:
@@ -317,7 +317,7 @@ post-deploy-smoke:
 # STAGE 14 — DAST (OWASP ZAP)
 # -----------------------------------------------------------------------------
 owasp-zap:
-  stage: dast
+  stage: dast-scan
   tags:
     - local-k8s
   needs:
