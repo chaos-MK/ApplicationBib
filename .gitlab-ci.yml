@@ -7,6 +7,7 @@ stages:
   - build
   - sbom
   - image-scan
+  - manifest-validation 
   - smoke-test
   - deploy
 
@@ -135,7 +136,7 @@ sbom-syft:
     expire_in: 30 days
 
 # -----------------------------------------------------------------------------
-# STAGE 8 — TRIVY
+# STAGE 8a — TRIVY
 # -----------------------------------------------------------------------------
 image-scan-trivy:
   stage: image-scan
@@ -176,6 +177,28 @@ image-scan-grype:
     - skopeo login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
     - skopeo copy "docker://$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" docker-archive:image.tar
     - grype docker-archive:image.tar --fail-on high
+
+# -----------------------------------------------------------------------------
+# STAGE 9a — KUBECONFORM (schema validation)
+# -----------------------------------------------------------------------------
+kubeconform:
+  stage: manifest-validation
+  image:
+    name: ghcr.io/yannh/kubeconform:latest-alpine
+    entrypoint: [""]
+  script:
+    - /kubeconform -strict -summary k8s/app/*.yaml k8s/postgres/*.yaml k8s/vault/*.yaml
+
+# -----------------------------------------------------------------------------
+# STAGE 9b — KUBE-SCORE (security & best practices)
+# -----------------------------------------------------------------------------
+kube-score:
+  stage: manifest-validation
+  image:
+    name: zegl/kube-score:latest
+    entrypoint: [""]
+  script:
+    - kube-score score k8s/app/*.yaml k8s/postgres/*.yaml k8s/vault/*.yaml
 
 # -----------------------------------------------------------------------------
 # STAGE 9 — SMOKE TEST
