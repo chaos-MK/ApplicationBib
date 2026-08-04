@@ -18,7 +18,7 @@ spec:
 
       containers:
         - name: applicationbib
-          image: registry.gitlab.com/khalilmohamed798/applicationbib:f573f325
+          image: registry.gitlab.com/khalilmohamed798/applicationbib:bb0073df
           imagePullPolicy: Always
           env:
             - name: SPRING_PROFILES_ACTIVE
