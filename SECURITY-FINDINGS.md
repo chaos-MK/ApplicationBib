@@ -444,6 +444,55 @@ result, any pod in the cluster could reach Vault, including its API on port
 **Status:** Fixed
 
 
+## Finding #010 — automountServiceAccountToken cannot be disabled (Vault Kubernetes auth dependency)
+
+**Date:** 2026-08-04
+**Discovered during:** RBAC review (checking for unused ServiceAccount token mounts)
+**Severity:** N/A (attempted hardening reverted; documented as architectural constraint)
+
+### Risk / Investigation
+While reviewing RBAC, `kubectl auth can-i --list` confirmed both
+`applicationbib-sa` and `postgres-sa` have no custom Role/RoleBinding
+grants — only Kubernetes' built-in discovery/self-review defaults. Since
+neither pod calls the Kubernetes API directly, disabling
+`automountServiceAccountToken` looked like a valid hardening step to
+remove an unused token from the container filesystem.
+
+### What happened
+Setting `automountServiceAccountToken: false` on both ServiceAccounts
+caused both the application and PostgreSQL pods to crash-loop on startup.
+Logs showed:
+`IllegalArgumentException: Resource file
+[/var/run/secrets/kubernetes.io/serviceaccount/token] does not exist`
+
+Root cause: although the app never calls the Kubernetes API itself,
+Spring Cloud Vault's `KUBERNETES` authentication method (used to
+authenticate to Vault and fetch DB credentials — see application-k8s.properties)
+reads the projected ServiceAccount token file to authenticate. The
+Vault Agent Injector sidecar on the PostgreSQL pod has the same
+dependency. Removing the automount removed the exact file Vault auth
+needs.
+
+### What I did
+Reverted `automountServiceAccountToken` to `true` (the default) on both
+ServiceAccounts, restored via `kubectl patch` immediately, then corrected
+`k8s/app/serviceaccount.yaml` and `k8s/postgres/serviceaccount.yaml` to
+avoid reintroducing the issue on next apply. Restarted both workloads and
+confirmed health: `/actuator/health` returns `UP`, PostgreSQL pod
+`2/2 Running` with no restarts.
+
+### Accepted trade-off
+The ServiceAccount token remains mounted in both pods despite neither pod
+calling the Kubernetes API directly, because Vault's Kubernetes auth
+method depends on it. This is an intentional, documented exception rather
+than an oversight — the actual attack surface is limited by the fact that
+`applicationbib-sa` and `postgres-sa` still carry no custom RBAC grants,
+so even if the token were exfiltrated, it authenticates to Vault only
+(not to arbitrary Kubernetes API operations).
+
+**Status:** Resolved (reverted change; documented as architectural constraint).
+
+
 
 ## Summary
 | Finding | CVEs/Issues Covered | Tool | Status |
@@ -457,3 +506,4 @@ result, any pod in the cluster could reach Vault, including its API on port
 | #007 | 1 (functional/architectural) | Manual (kube-proxy/minikube) | ✅ Resolved (documented trade-off) |
 | #008 | 8 (7 Critical + 1 Warning) | kube-score | ✅ Fixed (Warning accepted as project scope) |
 | #009 | 1 | Manual architectural review | ✅ Fixed |
+| #010 | Architectural security constraint (Vault Kubernetes auth) | RBAC review | ✅ Documented |
