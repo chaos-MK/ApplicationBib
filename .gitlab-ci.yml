@@ -299,19 +299,27 @@ post-deploy-smoke:
 
     - APP_POD=$(sudo /usr/local/bin/kubectl get pod -l app=applicationbib -o jsonpath='{.items[0].metadata.name}')
 
+    - echo "Port-forwarding to pod..."
+    - sudo /usr/local/bin/kubectl port-forward "$APP_POD" 18080:8080 &
+    - PF_PID=$!
+    - sleep 5
+
     - echo "Checking /actuator/health..."
-    - sudo /usr/local/bin/kubectl exec "$APP_POD" -- curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"'
+    - curl -sf http://localhost:18080/actuator/health | grep -q '"status":"UP"'
 
     - echo "Checking critical APIs..."
     # TODO: replace with your real critical endpoints
     - |
       for path in /api/books; do
-        code=$(sudo /usr/local/bin/kubectl exec "$APP_POD" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080$path")
+        code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:18080$path")
         if [ "$code" != "200" ]; then
           echo "FAIL: $path returned $code"
+          kill $PF_PID 2>/dev/null || true
           exit 1
         fi
       done
+
+    - kill $PF_PID 2>/dev/null || true
 
 # -----------------------------------------------------------------------------
 # STAGE 14 — DAST (OWASP ZAP)
