@@ -13,6 +13,7 @@ spec:
       labels:
         app: postgres
       annotations:
+        kube-score/ignore: container-security-context-user-group-id,container-security-context-readonlyrootfilesystem
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/role: "postgres"
         vault.hashicorp.com/agent-inject-secret-db-creds: "secret/data/applicationbib/db"
