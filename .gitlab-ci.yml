@@ -307,19 +307,19 @@ post-deploy-smoke:
     - echo "Checking /actuator/health..."
     - curl -sf http://localhost:18080/actuator/health | grep -q '"status":"UP"'
 
-    - echo "Checking critical APIs..."
-    # TODO: replace with your real critical endpoints
-    - |
-      for path in /api/books; do
-        code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:18080$path")
-        if [ "$code" != "200" ]; then
-          echo "FAIL: $path returned $code"
-          kill $PF_PID 2>/dev/null || true
-          exit 1
-        fi
-      done
+    - echo "Running critical API smoke tests..."
+    - pip install --user -r tests/requirements.txt
+    - >
+      BASE_URL=http://localhost:18080 python3 -m pytest tests/test_api.py
+      --junitxml=smoke-report.xml -v
+      || (kill $PF_PID 2>/dev/null; exit 1)
 
     - kill $PF_PID 2>/dev/null || true
+
+  artifacts:
+    when: always
+    reports:
+      junit: smoke-report.xml
 
 # -----------------------------------------------------------------------------
 # STAGE 14 — DAST (OWASP ZAP)
