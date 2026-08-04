@@ -25,6 +25,14 @@ spec:
               value: "k8s"
           ports:
             - containerPort: 8080
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
           resources:
             requests:
               cpu: "250m"
@@ -34,6 +42,7 @@ spec:
               cpu: "1"
               memory: "768Mi"
               ephemeral-storage: "512Mi"
+
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
@@ -43,9 +52,11 @@ spec:
             capabilities:
               drop:
                 - ALL
+
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+
       volumes:
         - name: tmp
           emptyDir: {}

@@ -27,14 +27,36 @@ spec:
       containers:
         - name: postgres
           image: docker.io/library/postgres:16
+          imagePullPolicy: Always
           command: ["/bin/sh", "-c"]
           args:
             - . /vault/secrets/db-creds && exec docker-entrypoint.sh postgres
           ports:
             - containerPort: 5432
+
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - localhost
+                - -p
+                - "5432"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            # readOnlyRootFilesystem intentionally omitted — accepted trade-off,
+            # official image needs root at startup to chown data dir (Finding #008)
+
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
+
           resources:
             requests:
               cpu: "250m"
@@ -44,6 +66,7 @@ spec:
               cpu: "1"
               memory: "512Mi"
               ephemeral-storage: "1Gi"
+
       volumes:
         - name: postgres-storage
           persistentVolumeClaim:

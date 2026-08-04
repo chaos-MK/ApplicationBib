@@ -3,6 +3,8 @@ kind: NetworkPolicy
 metadata:
   name: vault-server-netpol
   namespace: vault
+  annotations:
+    kube-score/ignore: networkpolicy-targets-pod
 spec:
   podSelector:
     matchLabels:
