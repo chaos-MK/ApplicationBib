@@ -384,7 +384,7 @@ owasp-zap:
     - sleep 5
     # TODO: baseline scan only fails on scan errors by default (not on warnings/alerts).
     # To actually block on vulnerabilities, add a ZAP rules config and pass it with -c
-    - docker run --rm --network host -v "$PWD":/zap/wrk/:rw zaproxy/zap-stable zap-baseline.py -t http://localhost:8080 -r zap-report.html
+    - podman run --rm --network host -v "$PWD":/zap/wrk/:Z docker.io/zaproxy/zap-stable zap-baseline.py -t http://localhost:8080 -r zap-report.html
 
   artifacts:
     when: always
