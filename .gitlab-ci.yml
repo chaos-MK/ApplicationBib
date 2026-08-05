@@ -379,12 +379,13 @@ owasp-zap:
     - post-deploy-smoke
 
   script:
+    - sudo pkill -f "kubectl.*port-forward" || true
     - APP_POD=$(sudo /usr/local/bin/kubectl get pod -l app=applicationbib -o jsonpath='{.items[0].metadata.name}')
-    - sudo /usr/local/bin/kubectl port-forward "$APP_POD" 8080:8080 &
+    - sudo /usr/local/bin/kubectl port-forward "$APP_POD" 18080:8080 &
     - sleep 5
     # TODO: baseline scan only fails on scan errors by default (not on warnings/alerts).
     # To actually block on vulnerabilities, add a ZAP rules config and pass it with -c
-    - podman run --rm --network host -v "$PWD":/zap/wrk/:Z docker.io/zaproxy/zap-stable zap-baseline.py -t http://localhost:8080 -r zap-report.html
+    - podman run --rm --network host -v "$PWD":/zap/wrk/:Z docker.io/zaproxy/zap-stable zap-baseline.py -t http://localhost:18080 -r zap-report.html
 
   artifacts:
     when: always
