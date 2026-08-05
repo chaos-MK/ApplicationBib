@@ -292,30 +292,54 @@ post-deploy-smoke:
     - local-k8s
   needs:
     - deploy
-
+  variables:
+    NAMESPACE: default
+    KUBECTL: /usr/local/bin/kubectl
   script:
-    - echo "Waiting for pod to report Ready..."
-    - sudo /usr/local/bin/kubectl wait --for=condition=Ready pod -l app=applicationbib --timeout=90s
+    - |
+      set -e
+      cleanup() {
+        [ -n "$PF_PID" ] && kill "$PF_PID" 2>/dev/null || true
+        wait "$PF_PID" 2>/dev/null || true
+      }
+      trap cleanup EXIT
 
-    - APP_POD=$(sudo /usr/local/bin/kubectl get pod -l app=applicationbib -o jsonpath='{.items[0].metadata.name}')
+      echo "Waiting for pod to report Ready..."
+      $KUBECTL -n "$NAMESPACE" wait --for=condition=Ready pod -l app=applicationbib --timeout=120s
 
-    - echo "Port-forwarding to pod..."
-    - sudo /usr/local/bin/kubectl port-forward "$APP_POD" 18080:8080 &
-    - PF_PID=$!
-    - sleep 5
+      APP_POD=$($KUBECTL -n "$NAMESPACE" get pod -l app=applicationbib \
+        --field-selector=status.phase=Running \
+        --sort-by=.metadata.creationTimestamp \
+        -o jsonpath='{.items[-1:].metadata.name}')
 
-    - echo "Checking /actuator/health..."
-    - curl -sf http://localhost:18080/actuator/health | grep -q '"status":"UP"'
+      if [ -z "$APP_POD" ]; then
+        echo "No running pod found for app=applicationbib"
+        exit 1
+      fi
+      echo "Using pod: $APP_POD"
 
-    - echo "Running critical API smoke tests..."
-    - pip install --user -r tests/requirements.txt
-    - >
-      BASE_URL=http://localhost:18080 python3 -m pytest tests/test_api.py
-      --junitxml=smoke-report.xml -v
-      || (kill $PF_PID 2>/dev/null; exit 1)
+      echo "Port-forwarding to pod..."
+      # IMPORTANT: redirect stdout/stderr so this background process
+      # never holds the job's output pipe open
+      $KUBECTL -n "$NAMESPACE" port-forward "$APP_POD" 18080:8080 \
+        > /tmp/port-forward.log 2>&1 &
+      PF_PID=$!
 
-    - kill $PF_PID 2>/dev/null || true
+      echo "Waiting for /actuator/health..."
+      for i in $(seq 1 20); do
+        curl -sf http://localhost:18080/actuator/health | grep -q '"status":"UP"' && break
+        echo "waiting for app..." && sleep 3
+      done
+      curl -sf http://localhost:18080/actuator/health | grep -q '"status":"UP"' \
+        || { echo "app never became healthy"; cat /tmp/port-forward.log; exit 1; }
 
+      echo "Setting up venv for smoke tests..."
+      python3 -m venv .venv
+      . .venv/bin/activate
+      pip install -r tests/requirements.txt
+
+      echo "Running critical API smoke tests..."
+      BASE_URL=http://localhost:18080 python3 -m pytest tests/test_api.py --junitxml=smoke-report.xml -v
   artifacts:
     when: always
     reports:
