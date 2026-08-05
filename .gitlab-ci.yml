@@ -1,7 +1,7 @@
 stages:
   - secrets
   - sast
-  - dependency
+  - dependency-sca
   - test
   - lint
   - bug-analysis
@@ -59,7 +59,7 @@ sonarqube:
 # STAGE 3 — SNYK
 # -----------------------------------------------------------------------------
 dependency-scan-snyk:
-  stage: dependency
+  stage: dependency-sca
   image:
     name: snyk/snyk:maven
     entrypoint: [""]
@@ -385,7 +385,12 @@ owasp-zap:
     - sleep 5
     # TODO: baseline scan only fails on scan errors by default (not on warnings/alerts).
     # To actually block on vulnerabilities, add a ZAP rules config and pass it with -c
-    - podman run --rm --network host -v "$PWD":/zap/wrk/:Z docker.io/zaproxy/zap-stable zap-baseline.py -t http://localhost:18080 -r zap-report.html
+    - echo "PWD=$PWD"
+    - id
+    - ls -ld "$PWD"
+    - touch zap-test.txt
+    - ls -l zap-test.txt
+    - podman run --rm --userns=keep-id --network host -v "$PWD":/zap/wrk/:Z docker.io/zaproxy/zap-stable zap-baseline.py -t http://localhost:18080 -r zap-report.html
 
   artifacts:
     when: always
