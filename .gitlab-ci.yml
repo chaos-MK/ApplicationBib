@@ -379,18 +379,55 @@ owasp-zap:
     - post-deploy-smoke
 
   script:
-    - sudo pkill -f "kubectl.*port-forward" || true
-    - APP_POD=$(sudo /usr/local/bin/kubectl get pod -l app=applicationbib -o jsonpath='{.items[0].metadata.name}')
-    - sudo /usr/local/bin/kubectl port-forward "$APP_POD" 18080:8080 &
-    - sleep 5
-    # TODO: baseline scan only fails on scan errors by default (not on warnings/alerts).
-    # To actually block on vulnerabilities, add a ZAP rules config and pass it with -c
-    - echo "PWD=$PWD"
-    - id
-    - ls -ld "$PWD"
-    - touch zap-test.txt
-    - ls -l zap-test.txt
-    - podman run --rm --userns=keep-id --network host -v "$PWD":/zap/wrk/:Z docker.io/zaproxy/zap-stable zap-baseline.py -t http://localhost:18080 -r zap-report.html
+    - |
+      set -e
+
+      cleanup() {
+        echo "Cleaning up port-forward..."
+        if [ -n "${PF_PID:-}" ]; then
+          kill "$PF_PID" 2>/dev/null || true
+          wait "$PF_PID" 2>/dev/null || true
+        fi
+      }
+
+      trap cleanup EXIT
+
+      APP_POD=$(sudo /usr/local/bin/kubectl get pod \
+        -l app=applicationbib \
+        -o jsonpath='{.items[0].metadata.name}')
+
+      echo "Using pod: $APP_POD"
+
+      sudo /usr/local/bin/kubectl port-forward "$APP_POD" 18080:8080 \
+        >/tmp/zap-port-forward.log 2>&1 &
+      PF_PID=$!
+
+      echo "Waiting for application..."
+
+      for i in $(seq 1 20); do
+        if curl -sf http://localhost:18080/actuator/health >/dev/null; then
+          break
+        fi
+        sleep 1
+      done
+
+      curl -sf http://localhost:18080/actuator/health >/dev/null \
+        || {
+          echo "Application never became reachable."
+          cat /tmp/zap-port-forward.log
+          exit 1
+        }
+
+      # TODO: Baseline scan returns exit code 2 when warnings are found.
+      # Add a ZAP rules config (-c) to control which alerts should fail the pipeline.
+      podman run --rm \
+        --userns=keep-id \
+        --network host \
+        -v "$PWD":/zap/wrk:Z \
+        docker.io/zaproxy/zap-stable \
+        zap-baseline.py \
+          -t http://localhost:18080 \
+          -r zap-report.html
 
   artifacts:
     when: always
