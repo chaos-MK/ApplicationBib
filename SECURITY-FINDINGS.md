@@ -1,11 +1,12 @@
 # Security Findings Log
 
 This log documents security and reliability findings identified by
-automated scanning tools (Gitleaks, Semgrep, SonarQube, Snyk, Hadolint,
-Trivy, Grype, Syft, kube-score) and manual architectural review, along
-with the remediation applied for each. Most tools run automatically in
-the GitLab CI/CD pipeline; some (e.g. kube-score) are currently run
-manually and may be added to CI later.
+manual and automated scanning tools (Gitleaks, Semgrep, SonarQube, Snyk, Hadolint,
+SpotBugs, Syft, Trivy, Grype, kubeconform, kube-score, and OWASP ZAP)
+and manual architectural reviews, along with the remediation applied for
+each. Most tools run automatically in the GitLab CI/CD pipeline, while
+manual reviews are used to identify architectural and design-level
+security issues that automated scanners cannot detect.
 
 ---
 
@@ -598,6 +599,53 @@ match against `vault-0`. No functional change; policy was already
 correctly enforcing.
 
 
+## Finding #013 — Backend authentication enforced only by frontend (architectural security flaw)
+
+**Date:** 2026-08-05  
+**Tool that found it:** Manual architectural review (during OWASP ZAP authenticated DAST preparation)  
+**Severity:** High  
+**Components affected:** Spring Security configuration, protected business API endpoints
+
+### Risk
+
+While preparing authenticated OWASP ZAP scanning, it was discovered that the
+React frontend authenticated users with Firebase, but the Spring Boot backend
+did not validate Firebase ID tokens or any bearer token.
+
+Protected business endpoints (`/project/**`, `/company/**`, `/users/**`,
+`/session/**`) were configured with `permitAll()`, relying entirely on the
+frontend to restrict access.
+
+This allowed anyone to bypass the React application and send requests directly
+to the backend using tools such as `curl`, Postman, OWASP ZAP, or Burp Suite.
+The backend trusted the client instead of enforcing authentication itself,
+violating the principle that authorization decisions must always be made
+server-side.
+
+### What I did
+
+1. Reviewed the authentication architecture while preparing authenticated
+   OWASP ZAP scanning.
+2. Verified that the backend contained no Firebase authentication filter,
+   JWT validation, or bearer token verification.
+3. Confirmed that sensitive business endpoints were publicly accessible
+   because they were configured with `permitAll()`.
+4. Planned an architectural redesign to enforce authentication in the
+   backend by validating Firebase ID tokens and protecting all business
+   endpoints with Spring Security.
+
+### What changed
+
+- Authentication responsibility moved from the React frontend to the
+  Spring Boot backend.
+- Protected business endpoints will require successful backend
+  authentication instead of relying on client-side access control.
+- Authenticated OWASP ZAP scanning becomes possible once backend
+  authentication is implemented.
+
+**Status:** Planned (architectural remediation in progress)
+
+
 
 ## Summary
 | Finding | CVEs/Issues Covered | Tool | Status |
@@ -614,3 +662,4 @@ correctly enforcing.
 | #010 | Architectural security constraint (Vault Kubernetes auth) | RBAC review | ✅ Documented |
 | #011 | 4 (2 Critical + 2 High) | Snyk | ✅ Fixed |
 | #012 | 1 (false positive) | kube-score | ✅ Verified false positive |
+| #013 | 1 (backend authentication architecture flaw) | Manual architecture review | 🚧 Planned |

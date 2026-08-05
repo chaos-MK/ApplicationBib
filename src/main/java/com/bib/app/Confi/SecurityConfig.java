@@ -60,14 +60,15 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 // Public endpoints - order matters!
                 .requestMatchers("/login", "/logout", "/error").permitAll()
-                .requestMatchers("/actuator/health", "/cohort/**", "/project/**", "/company/**", "/users/**","/session/**").permitAll()
+                .requestMatchers("/actuator/health").permitAll() 
+                .requestMatchers("/cohort/**", "/project/**", "/company/**", "/users/**","/session/**").authenticated()
                 .requestMatchers(
                     "/swagger-ui/**",
                     "/v3/api-docs/**",
                     "/swagger-ui.html",
                     "/swagger-resources/**",
                     "/webjars/**"
-                ).permitAll()
+                ).authenticated()
                 // All other requests require authentication
                 .anyRequest().authenticated()
             )
