@@ -294,12 +294,12 @@ post-deploy-smoke:
     - deploy
   variables:
     NAMESPACE: default
-    KUBECTL: /usr/local/bin/kubectl
+    KUBECTL: sudo /usr/local/bin/kubectl
   script:
     - |
       set -e
       cleanup() {
-        [ -n "$PF_PID" ] && kill "$PF_PID" 2>/dev/null || true
+        [ -n "$PF_PID" ] && sudo kill "$PF_PID" 2>/dev/null || true
         wait "$PF_PID" 2>/dev/null || true
       }
       trap cleanup EXIT
@@ -319,8 +319,7 @@ post-deploy-smoke:
       echo "Using pod: $APP_POD"
 
       echo "Port-forwarding to pod..."
-      # IMPORTANT: redirect stdout/stderr so this background process
-      # never holds the job's output pipe open
+      # redirected so this background process never holds the job's output pipe open
       $KUBECTL -n "$NAMESPACE" port-forward "$APP_POD" 18080:8080 \
         > /tmp/port-forward.log 2>&1 &
       PF_PID=$!
