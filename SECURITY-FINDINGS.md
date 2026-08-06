@@ -646,6 +646,54 @@ server-side.
 **Status:** Planned (architectural remediation in progress)
 
 
+## Finding #014 — High: Transitive CVEs introduced by Firebase Admin SDK
+
+**Date:** 2026-08-06
+**Tool that found it:** Snyk
+**Severity:** High (6 findings)
+**Package affected:** firebase-admin@9.7.0
+(transitively via grpc-netty-shaded, netty-codec-http,
+netty-codec-compression and opentelemetry-api)
+
+### Risk
+
+After integrating Firebase Authentication into the backend, Snyk detected
+six High-severity vulnerabilities introduced by the Firebase Admin SDK's
+transitive dependencies.
+
+The reported issues included:
+
+- Resource allocation / denial-of-service risks in Netty HTTP components.
+- Infinite loop vulnerability in Netty compression.
+- Resource exhaustion issue in gRPC.
+- Resource allocation issue in OpenTelemetry API.
+
+Although the application does not directly depend on these libraries,
+they become part of the runtime through the Firebase Admin SDK.
+
+### What I did
+
+1. Upgraded `firebase-admin` from **9.7.0** to **9.7.1**.
+2. Overrode vulnerable transitive dependencies using Maven
+   `dependencyManagement`.
+3. Updated Netty HTTP components to the patched release.
+4. Updated OpenTelemetry API to the fixed version.
+5. Re-ran `./mvnw clean verify`.
+6. Re-ran the Snyk dependency scan to verify remediation.
+
+### What changed
+
+- `pom.xml`
+  - `firebase-admin`:
+    `9.7.0` → `9.7.1`
+  - Added dependency overrides:
+    - `io.netty:netty-codec-http`
+    - `io.netty:netty-codec-compression`
+    - `io.opentelemetry:opentelemetry-api`
+
+**Status:** Fixed
+
+
 
 ## Summary
 | Finding | CVEs/Issues Covered | Tool | Status |
@@ -663,3 +711,4 @@ server-side.
 | #011 | 4 (2 Critical + 2 High) | Snyk | ✅ Fixed |
 | #012 | 1 (false positive) | kube-score | ✅ Verified false positive |
 | #013 | 1 (backend authentication architecture flaw) | Manual architecture review | 🚧 Planned |
+| #014 | 6 High | Snyk | ✅ Fixed |
