@@ -28,6 +28,8 @@ variables:
 # -----------------------------------------------------------------------------
 secret-scan:
   stage: secrets
+  tags:
+    - local-k8s
   image:
     name: zricethezav/gitleaks:latest
     entrypoint: [""]
@@ -39,6 +41,8 @@ secret-scan:
 # -----------------------------------------------------------------------------
 sast-semgrep:
   stage: sast
+  tags:
+    - local-k8s
   image: python:3.12-slim
   script:
     - pip install semgrep
@@ -49,6 +53,8 @@ sast-semgrep:
 # -----------------------------------------------------------------------------
 sonarqube:
   stage: sast
+  tags:
+    - local-k8s
   image: maven:3.9-eclipse-temurin-21
   variables:
     SONAR_HOST_URL: https://sonarcloud.io
@@ -60,6 +66,8 @@ sonarqube:
 # -----------------------------------------------------------------------------
 dependency-scan-snyk:
   stage: dependency-sca
+  tags:
+    - local-k8s
   image:
     name: snyk/snyk:maven
     entrypoint: [""]
@@ -72,6 +80,8 @@ dependency-scan-snyk:
 # -----------------------------------------------------------------------------
 build-test:
   stage: test
+  tags:
+    - local-k8s
   image: maven:3.9-eclipse-temurin-21
 
   services:
@@ -99,6 +109,8 @@ build-test:
 # -----------------------------------------------------------------------------
 dockerfile-lint:
   stage: lint
+  tags:
+    - local-k8s
   image:
     name: hadolint/hadolint:latest-debian
     entrypoint: [""]
@@ -110,6 +122,8 @@ dockerfile-lint:
 # -----------------------------------------------------------------------------
 spotbugs:
   stage: bug-analysis
+  tags:
+    - local-k8s
   image: maven:3.9-eclipse-temurin-21
   script:
     # TODO: requires spotbugs-maven-plugin bound in pom.xml — let me know if it's not set up yet
@@ -125,6 +139,8 @@ spotbugs:
 # -----------------------------------------------------------------------------
 build-image:
   stage: build
+  tags:
+    - local-k8s
   image: quay.io/buildah/stable
 
   variables:
@@ -140,6 +156,8 @@ build-image:
 # -----------------------------------------------------------------------------
 sbom-syft:
   stage: sbom
+  tags:
+    - local-k8s
   image: alpine:3.20
 
   before_script:
@@ -159,7 +177,8 @@ sbom-syft:
 # -----------------------------------------------------------------------------
 image-scan-trivy:
   stage: image-scan
-
+  tags:
+    - local-k8s
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
@@ -181,7 +200,8 @@ image-scan-trivy:
 # -----------------------------------------------------------------------------
 image-scan-grype:
   stage: image-scan
-
+  tags:
+    - local-k8s
   image:
     name: quay.io/skopeo/stable
     entrypoint: [""]
@@ -202,6 +222,8 @@ image-scan-grype:
 # -----------------------------------------------------------------------------
 kubeconform:
   stage: manifest-validation
+  tags:
+    - local-k8s
   image:
     name: ghcr.io/yannh/kubeconform:latest-alpine
     entrypoint: [""]
@@ -213,6 +235,8 @@ kubeconform:
 # -----------------------------------------------------------------------------
 kube-score:
   stage: manifest-validation
+  tags:
+    - local-k8s
   image:
     name: zegl/kube-score:latest
     entrypoint: [""]
