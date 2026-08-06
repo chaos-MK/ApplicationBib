@@ -6,60 +6,33 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import com.bib.app.service.MyUserDetailService;
+import com.bib.app.security.FirebaseAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
-
-    @Autowired 
-    private MyUserDetailService userDetailService;
     
-    @Bean 
-    public UserDetailsService userDetailsService() { 
-        return userDetailService; 
-    } 
-    
-    @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider =
-                new DaoAuthenticationProvider(userDetailService);
-
-        provider.setPasswordEncoder(passwordEncoder());
-
-        return provider;
-    }
-    
-    @Bean 
-    public PasswordEncoder passwordEncoder() { 
-        return new BCryptPasswordEncoder(); 
-    } 
+    @Autowired
+    private FirebaseAuthenticationFilter firebaseAuthenticationFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // More specific patterns first
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                // Public endpoints - order matters!
-                .requestMatchers("/login", "/logout", "/error").permitAll()
+                .requestMatchers("/error").permitAll()
                 .requestMatchers("/actuator/health").permitAll() 
                 .requestMatchers("/cohort/**", "/project/**", "/company/**", "/users/**","/session/**").authenticated()
                 .requestMatchers(
@@ -69,31 +42,8 @@ public class SecurityConfig {
                     "/swagger-resources/**",
                     "/webjars/**"
                 ).authenticated()
-                // All other requests require authentication
                 .anyRequest().authenticated()
             )
-            .formLogin(login -> login
-                .loginProcessingUrl("/login")
-                .successHandler((request, response, authentication) -> {
-                    response.setStatus(HttpStatus.OK.value());
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    
-                    // Clear response buffer first
-                    response.resetBuffer();
-                    
-                    // Write single JSON response
-                    response.getWriter().print("{\"status\":\"Login successful\"}");
-                    response.flushBuffer();
-                })
-                .failureHandler((request, response, exception) -> {
-                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    response.getWriter().write("{\"error\":\"Invalid credentials\"}");
-                }))
-            .logout(logout -> logout
-                .logoutUrl("/logout")
-                .deleteCookies("JSESSIONID")
-                .invalidateHttpSession(true))
             .exceptionHandling(handling -> handling
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(HttpStatus.UNAUTHORIZED.value());
@@ -105,6 +55,11 @@ public class SecurityConfig {
                     response.setContentType("application/json");
                     response.getWriter().write("{\"error\":\"Access denied\"}");
                 }));
+        
+        http.addFilterBefore(
+        	    firebaseAuthenticationFilter,
+        	    UsernamePasswordAuthenticationFilter.class
+        	);
 
         return http.build();
     }
@@ -125,8 +80,4 @@ public class SecurityConfig {
         return source;
     }
     
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
-        return authenticationConfiguration.getAuthenticationManager();
-    }
 }

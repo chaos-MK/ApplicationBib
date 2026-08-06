@@ -11,6 +11,16 @@ spec:
     metadata:
       labels:
         app: applicationbib
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "applicationbib"
+
+        vault.hashicorp.com/agent-inject-secret-firebase.json: "secret/data/applicationbib/firebase"
+
+        vault.hashicorp.com/agent-inject-template-firebase.json: |
+          {{- with secret "secret/data/applicationbib/firebase" -}}
+          {{ index .Data.data "service-account.json" }}
+          {{- end }}
     spec:
       serviceAccountName: applicationbib-sa
       imagePullSecrets:
