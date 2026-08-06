@@ -33,7 +33,7 @@ spec:
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: "k8s"
-             - name: FIREBASE_CREDENTIALS
+            - name: FIREBASE_CREDENTIALS
               value: "/vault/secrets/firebase.json"
           ports:
             - containerPort: 8080
