@@ -22,8 +22,12 @@ public class FirebaseConfig {
             return;
         }
 
+        String credentialsPath = System.getenv()
+                .getOrDefault("FIREBASE_CREDENTIALS",
+                        "/vault/secrets/firebase.json");
+
         try (FileInputStream serviceAccount =
-                new FileInputStream("/vault/secrets/firebase.json");) {
+                     new FileInputStream(credentialsPath)) {
 
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
