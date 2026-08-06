@@ -22,6 +22,14 @@ workflow:
 
 variables:
   GIT_DEPTH: "0"
+  
+.m2-cache: &m2-cache
+  cache:
+    key: maven-deps
+    paths:
+      - .m2/repository/
+  variables:
+    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
 
 # -----------------------------------------------------------------------------
 # STAGE 1 — SECRET SCANNING
@@ -56,8 +64,10 @@ sonarqube:
   tags:
     - local-k8s
   image: maven:3.9-eclipse-temurin-21
+  <<: *m2-cache
   variables:
     SONAR_HOST_URL: https://sonarcloud.io
+    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
   script:
     - mvn clean verify -DskipTests sonar:sonar -Dsonar.token="$SONAR_TOKEN"
 
@@ -83,10 +93,9 @@ build-test:
   tags:
     - local-k8s
   image: maven:3.9-eclipse-temurin-21
-
+  <<: *m2-cache
   services:
     - postgres:16
-
   variables:
     POSTGRES_USER: test
     POSTGRES_PASSWORD: test
@@ -94,10 +103,9 @@ build-test:
     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/testdb
     SPRING_DATASOURCE_USERNAME: test
     SPRING_DATASOURCE_PASSWORD: test
-
+    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
   script:
     - mvn -B verify || (cat target/surefire-reports/*.txt && exit 1)
-
   artifacts:
     when: always
     reports:
@@ -125,8 +133,10 @@ spotbugs:
   tags:
     - local-k8s
   image: maven:3.9-eclipse-temurin-21
+  <<: *m2-cache
+  variables:
+    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
   script:
-    # TODO: requires spotbugs-maven-plugin bound in pom.xml — let me know if it's not set up yet
     - mvn spotbugs:check
   artifacts:
     when: always
@@ -142,13 +152,11 @@ build-image:
   tags:
     - local-k8s
   image: quay.io/buildah/stable
-
   variables:
     STORAGE_DRIVER: vfs
-
   script:
     - buildah login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
-    - buildah build -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
+    - buildah build --layers -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
     - buildah push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
 # -----------------------------------------------------------------------------
@@ -182,10 +190,14 @@ image-scan-trivy:
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
-
   needs:
     - build-image
-
+  cache:
+    key: trivy-db
+    paths:
+      - .trivycache/
+  variables:
+    TRIVY_CACHE_DIR: .trivycache
   script:
     - >
       trivy image
@@ -193,6 +205,7 @@ image-scan-trivy:
       --password "$CI_REGISTRY_PASSWORD"
       --severity CRITICAL,HIGH
       --exit-code 1
+      --timeout 15m
       "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
 # -----------------------------------------------------------------------------
