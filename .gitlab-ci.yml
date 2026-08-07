@@ -25,7 +25,9 @@ variables:
   
 .m2-cache: &m2-cache
   cache:
-    key: maven-deps
+    key:
+      files:
+        - pom.xml
     paths:
       - .m2/repository/
   variables:
@@ -37,7 +39,7 @@ variables:
 secret-scan:
   stage: secrets
   tags:
-    - local-k8s
+    - docker-ci
   image:
     name: zricethezav/gitleaks:latest
     entrypoint: [""]
@@ -50,7 +52,7 @@ secret-scan:
 sast-semgrep:
   stage: sast
   tags:
-    - local-k8s
+    - docker-ci
   image: python:3.12-slim
   script:
     - pip install semgrep
@@ -62,12 +64,14 @@ sast-semgrep:
 sonarqube:
   stage: sast
   tags:
-    - local-k8s
+    - docker-ci
   image: maven:3.9-eclipse-temurin-21
+
   <<: *m2-cache
+
   variables:
     SONAR_HOST_URL: https://sonarcloud.io
-    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+
   script:
     - mvn clean verify -DskipTests sonar:sonar -Dsonar.token="$SONAR_TOKEN"
 
@@ -77,7 +81,7 @@ sonarqube:
 dependency-scan-snyk:
   stage: dependency-sca
   tags:
-    - local-k8s
+    - docker-ci
   image:
     name: snyk/snyk:maven
     entrypoint: [""]
@@ -91,11 +95,14 @@ dependency-scan-snyk:
 build-test:
   stage: test
   tags:
-    - local-k8s
+    - docker-ci
   image: maven:3.9-eclipse-temurin-21
+
   <<: *m2-cache
+
   services:
     - postgres:16
+
   variables:
     POSTGRES_USER: test
     POSTGRES_PASSWORD: test
@@ -103,9 +110,10 @@ build-test:
     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/testdb
     SPRING_DATASOURCE_USERNAME: test
     SPRING_DATASOURCE_PASSWORD: test
-    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+
   script:
     - mvn -B verify || (cat target/surefire-reports/*.txt && exit 1)
+
   artifacts:
     when: always
     reports:
@@ -118,7 +126,7 @@ build-test:
 dockerfile-lint:
   stage: lint
   tags:
-    - local-k8s
+    - docker-ci
   image:
     name: hadolint/hadolint:latest-debian
     entrypoint: [""]
@@ -131,13 +139,14 @@ dockerfile-lint:
 spotbugs:
   stage: bug-analysis
   tags:
-    - local-k8s
+    - docker-ci
   image: maven:3.9-eclipse-temurin-21
+
   <<: *m2-cache
-  variables:
-    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+
   script:
     - mvn spotbugs:check
+
   artifacts:
     when: always
     paths:
@@ -150,7 +159,7 @@ spotbugs:
 build-image:
   stage: build
   tags:
-    - local-k8s
+    - docker-ci
   image: quay.io/buildah/stable
   variables:
     STORAGE_DRIVER: vfs
@@ -165,7 +174,7 @@ build-image:
 sbom-syft:
   stage: sbom
   tags:
-    - local-k8s
+    - docker-ci
   image: alpine:3.20
 
   before_script:
@@ -186,7 +195,7 @@ sbom-syft:
 image-scan-trivy:
   stage: image-scan
   tags:
-    - local-k8s
+    - docker-ci
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
@@ -214,7 +223,7 @@ image-scan-trivy:
 image-scan-grype:
   stage: image-scan
   tags:
-    - local-k8s
+    - docker-ci
   image:
     name: quay.io/skopeo/stable
     entrypoint: [""]
@@ -236,7 +245,7 @@ image-scan-grype:
 kubeconform:
   stage: manifest-validation
   tags:
-    - local-k8s
+    - docker-ci
   image:
     name: ghcr.io/yannh/kubeconform:latest-alpine
     entrypoint: [""]
@@ -249,7 +258,7 @@ kubeconform:
 kube-score:
   stage: manifest-validation
   tags:
-    - local-k8s
+    - docker-ci
   image:
     name: zegl/kube-score:latest
     entrypoint: [""]
