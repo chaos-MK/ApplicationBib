@@ -421,6 +421,7 @@ owasp-zap:
   stage: dast-scan
   tags:
     - local-k8s
+
   needs:
     - post-deploy-smoke
 
@@ -464,11 +465,14 @@ owasp-zap:
           exit 1
         }
 
-      # TODO: Baseline scan returns exit code 2 when warnings are found.
-      # Add a ZAP rules config (-c) to control which alerts should fail the pipeline.
+      echo "Starting authenticated OWASP ZAP scan..."
+
       podman run --rm \
         --userns=keep-id \
         --network host \
+        -e ZAP_AUTH_HEADER="Authorization" \
+        -e ZAP_AUTH_HEADER_VALUE="Bearer $ZAP_AUTH_TOKEN" \
+        -e ZAP_AUTH_HEADER_SITE="localhost" \
         -v "$PWD":/zap/wrk:Z \
         docker.io/zaproxy/zap-stable \
         zap-baseline.py \
