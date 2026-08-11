@@ -29,7 +29,8 @@ deploy:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
-    - sed -i "s|image: registry.gitlab.com/khalilmohamed798/applicationbib:.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|" k8s/app/deployment.yaml
+    - |
+      sed -i "s|image: registry.gitlab.com/khalilmohamed798/applicationbib:.*|image: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}|" k8s/app/deployment.yaml
     - sudo /usr/local/bin/kubectl apply -f k8s/app/deployment.yaml
     - sudo /usr/local/bin/kubectl rollout status deployment/applicationbib --timeout=120s
 
