@@ -50,10 +50,12 @@ owasp-zap:
 
       cleanup() {
         echo "Cleaning up port-forward..."
+
         if [ -n "${PF_PID:-}" ]; then
           sudo kill "$PF_PID" 2>/dev/null || true
-          wait "$PF_PID" 2>/dev/null || true
         fi
+
+        sudo pkill -f "kubectl.*port-forward.*18080" 2>/dev/null || true
       }
 
       trap cleanup EXIT
@@ -63,6 +65,11 @@ owasp-zap:
         --field-selector=status.phase=Running \
         --sort-by=.metadata.creationTimestamp \
         -o jsonpath='{.items[-1:].metadata.name}')
+
+      if [ -z "$APP_POD" ]; then
+        echo "No running application pod found."
+        exit 1
+      fi
 
       echo "Using pod: $APP_POD"
 
@@ -79,12 +86,42 @@ owasp-zap:
         sleep 1
       done
 
-      curl -sf http://localhost:18080/actuator/health >/dev/null \
-        || {
-          echo "Application never became reachable."
-          cat /tmp/zap-port-forward.log
-          exit 1
-        }
+      curl -sf http://localhost:18080/actuator/health >/dev/null || {
+        echo "Application never became reachable."
+        cat /tmp/zap-port-forward.log
+        exit 1
+      }
+
+      echo "Application is reachable."
+
+      # ---------------------------------------------------------
+      # Generate fresh Firebase ID token
+      # ---------------------------------------------------------
+
+      echo "Generating Firebase ID token..."
+
+      FIREBASE_RESPONSE=$(curl -sS \
+        "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}" \
+        -H "Content-Type: application/json" \
+        --data-binary "{
+          \"email\": \"${ZAP_TEST_EMAIL}\",
+          \"password\": \"${ZAP_TEST_PASSWORD}\",
+          \"returnSecureToken\": true
+        }")
+
+      ZAP_AUTH_TOKEN=$(echo "$FIREBASE_RESPONSE" | jq -r '.idToken')
+
+      if [ -z "$ZAP_AUTH_TOKEN" ] || [ "$ZAP_AUTH_TOKEN" = "null" ]; then
+        echo "Failed to obtain Firebase ID token."
+        echo "$FIREBASE_RESPONSE" | jq -r '.error.message // "Unknown Firebase authentication error"'
+        exit 1
+      fi
+
+      echo "Firebase ID token generated successfully."
+
+      # ---------------------------------------------------------
+      # Verify authenticated API access
+      # ---------------------------------------------------------
 
       echo "Testing authenticated API access..."
 
@@ -104,6 +141,10 @@ owasp-zap:
       fi
 
       echo "Authenticated API request succeeded."
+
+      # ---------------------------------------------------------
+      # OWASP ZAP
+      # ---------------------------------------------------------
 
       echo "Starting authenticated OWASP ZAP scan..."
 
