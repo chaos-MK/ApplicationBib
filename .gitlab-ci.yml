@@ -465,6 +465,30 @@ owasp-zap:
           exit 1
         }
 
+      echo "Testing authenticated API access..."
+
+      curl -sf \
+        -H "Authorization: Bearer $ZAP_AUTH_TOKEN" \
+        http://localhost:18080/project/getall \
+        >/dev/null \
+        || {
+          echo "Authenticated API request failed."
+          exit 1
+        }
+
+      echo "Authenticated API request succeeded."
+
+      echo "Creating ZAP target list..."
+
+      cat > zap-targets.txt <<'EOF'
+      http://localhost:18080/project/getall
+      http://localhost:18080/users
+      http://localhost:18080/users/with-dashboard
+      http://localhost:18080/users/with-graphs
+      http://localhost:18080/company
+      http://localhost:18080/cohort
+      EOF
+
       echo "Starting authenticated OWASP ZAP scan..."
 
       podman run --rm \
@@ -473,7 +497,7 @@ owasp-zap:
         -v "$PWD":/zap/wrk:Z \
         docker.io/zaproxy/zap-stable \
         zap-baseline.py \
-          -t http://localhost:18080 \
+          -t http://localhost:18080/project/getall \
           -r zap-report.html \
           -z "-config replacer.full_list\(0\).description=FirebaseAuth \
               -config replacer.full_list\(0\).enabled=true \
