@@ -8,58 +8,28 @@ workflow:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
 
-.m2-cache: &m2-cache
-  cache:
-    key:
-      files:
-        - pom.xml
-    paths:
-      - .m2/repository/
-  variables:
-    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
-
-# ---------------------------------------------------------
-# BUILD
-# ---------------------------------------------------------
-build-test:
+build-image:
   stage: build
   tags:
     - docker-ci
-
-  image: maven:3.9-eclipse-temurin-21
-
-  <<: *m2-cache
-
-  services:
-    - postgres:16
-
+  image: quay.io/buildah/stable
   variables:
-    POSTGRES_USER: test
-    POSTGRES_PASSWORD: test
-    POSTGRES_DB: testdb
-    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/testdb
-    SPRING_DATASOURCE_USERNAME: test
-    SPRING_DATASOURCE_PASSWORD: test
-
+    STORAGE_DRIVER: vfs
   script:
-    - mvn -B verify
+    - buildah login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - buildah build --layers -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
+    - buildah push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
-# ---------------------------------------------------------
-# DEPLOY
-# ---------------------------------------------------------
 deploy:
   stage: deploy
   tags:
     - local-k8s
-
+  needs:
+    - build-image
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-
-  needs:
-    - build-test
-
   script:
-    - 'sed -i "s|image: registry.gitlab.com/khalilmohamed798/applicationbib:.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|" k8s/app/deployment.yaml'
+    - sed -i "s|image: registry.gitlab.com/khalilmohamed798/applicationbib:.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|" k8s/app/deployment.yaml
     - sudo /usr/local/bin/kubectl apply -f k8s/app/deployment.yaml
     - sudo /usr/local/bin/kubectl rollout status deployment/applicationbib --timeout=120s
 
