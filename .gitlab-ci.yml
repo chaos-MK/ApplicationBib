@@ -108,8 +108,14 @@ owasp-zap:
           \"password\": \"${ZAP_TEST_PASSWORD}\",
           \"returnSecureToken\": true
         }")
+        
+      echo "Firebase response fields:"
+      echo "$FIREBASE_RESPONSE" | jq 'keys'
 
       ZAP_AUTH_TOKEN=$(echo "$FIREBASE_RESPONSE" | jq -r '.idToken')
+      
+      echo "Token length: ${#ZAP_AUTH_TOKEN}"
+      echo "JWT parts: $(echo "$ZAP_AUTH_TOKEN" | awk -F. '{print NF}')"
 
       if [ -z "$ZAP_AUTH_TOKEN" ] || [ "$ZAP_AUTH_TOKEN" = "null" ]; then
         echo "Failed to obtain Firebase ID token."
