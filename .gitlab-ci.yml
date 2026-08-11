@@ -1,0 +1,160 @@
+stages:
+  - build
+  - deploy
+  - dast-scan
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+.m2-cache: &m2-cache
+  cache:
+    key:
+      files:
+        - pom.xml
+    paths:
+      - .m2/repository/
+  variables:
+    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+
+# ---------------------------------------------------------
+# BUILD
+# ---------------------------------------------------------
+build-test:
+  stage: build
+  tags:
+    - docker-ci
+
+  image: maven:3.9-eclipse-temurin-21
+
+  <<: *m2-cache
+
+  services:
+    - postgres:16
+
+  variables:
+    POSTGRES_USER: test
+    POSTGRES_PASSWORD: test
+    POSTGRES_DB: testdb
+    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/testdb
+    SPRING_DATASOURCE_USERNAME: test
+    SPRING_DATASOURCE_PASSWORD: test
+
+  script:
+    - mvn -B verify
+
+# ---------------------------------------------------------
+# DEPLOY
+# ---------------------------------------------------------
+deploy:
+  stage: deploy
+  tags:
+    - local-k8s
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+  needs:
+    - build-test
+
+  script:
+    - 'sed -i "s|image: registry.gitlab.com/khalilmohamed798/applicationbib:.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|" k8s/app/deployment.yaml'
+    - sudo /usr/local/bin/kubectl apply -f k8s/app/deployment.yaml
+    - sudo /usr/local/bin/kubectl rollout status deployment/applicationbib --timeout=120s
+
+# ---------------------------------------------------------
+# OWASP ZAP
+# ---------------------------------------------------------
+owasp-zap:
+  stage: dast-scan
+  tags:
+    - local-k8s
+
+  needs:
+    - deploy
+
+  script:
+    - |
+      set -e
+
+      cleanup() {
+        echo "Cleaning up port-forward..."
+        if [ -n "${PF_PID:-}" ]; then
+          sudo kill "$PF_PID" 2>/dev/null || true
+          wait "$PF_PID" 2>/dev/null || true
+        fi
+      }
+
+      trap cleanup EXIT
+
+      APP_POD=$(sudo /usr/local/bin/kubectl get pod \
+        -l app=applicationbib \
+        --field-selector=status.phase=Running \
+        --sort-by=.metadata.creationTimestamp \
+        -o jsonpath='{.items[-1:].metadata.name}')
+
+      echo "Using pod: $APP_POD"
+
+      sudo /usr/local/bin/kubectl port-forward "$APP_POD" 18080:8080 \
+        >/tmp/zap-port-forward.log 2>&1 &
+      PF_PID=$!
+
+      echo "Waiting for application..."
+
+      for i in $(seq 1 20); do
+        if curl -sf http://localhost:18080/actuator/health >/dev/null; then
+          break
+        fi
+        sleep 1
+      done
+
+      curl -sf http://localhost:18080/actuator/health >/dev/null \
+        || {
+          echo "Application never became reachable."
+          cat /tmp/zap-port-forward.log
+          exit 1
+        }
+
+      echo "Testing authenticated API access..."
+
+      HTTP_STATUS=$(curl -s \
+        -o /tmp/api-response.txt \
+        -w "%{http_code}" \
+        -H "Authorization: Bearer $ZAP_AUTH_TOKEN" \
+        http://localhost:18080/project/getall)
+
+      echo "API response status: $HTTP_STATUS"
+
+      if [ "$HTTP_STATUS" != "200" ]; then
+        echo "Authenticated API request failed."
+        echo "Response body:"
+        cat /tmp/api-response.txt
+        exit 1
+      fi
+
+      echo "Authenticated API request succeeded."
+
+      echo "Starting authenticated OWASP ZAP scan..."
+
+      podman run --rm \
+        --userns=keep-id \
+        --network host \
+        -v "$PWD":/zap/wrk:Z \
+        docker.io/zaproxy/zap-stable \
+        zap-baseline.py \
+          -t http://localhost:18080/project/getall \
+          -r zap-report.html \
+          -z "-config replacer.full_list\(0\).description=FirebaseAuth \
+              -config replacer.full_list\(0\).enabled=true \
+              -config replacer.full_list\(0\).matchtype=REQ_HEADER \
+              -config replacer.full_list\(0\).matchstr=Authorization \
+              -config replacer.full_list\(0\).replacement=Bearer%20${ZAP_AUTH_TOKEN} \
+              -config replacer.full_list\(0\).initiators= \
+              -config replacer.full_list\(0\).matchregex=false"
+
+  artifacts:
+    when: always
+    paths:
+      - zap-report.html
+    expire_in: 7 days
