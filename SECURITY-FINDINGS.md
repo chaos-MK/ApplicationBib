@@ -735,6 +735,175 @@ they become part of the runtime through the Firebase Admin SDK.
 **Status:** Fixed
 
 
+## Finding #015 — Medium: Over-Permissive Vault Policies and Unbounded Kubernetes Auth Token TTLs
+
+**Date:** 2026-08-12
+**Tool that found it:** Manual architectural review (`vault read`, `vault policy read`)
+**Severity:** Medium
+**Component:** HashiCorp Vault — Kubernetes authentication roles `applicationbib` and `postgres`
+
+### Risk
+
+A manual review of the Vault policies and Kubernetes authentication roles
+identified two least-privilege issues.
+
+First, the `applicationbib-read` policy granted `read` access to the wildcard
+path:
+
+`secret/data/applicationbib/*`
+
+This allowed the application to read any current or future secret created
+under the `applicationbib` prefix, even though the application only requires
+the `firebase` and `db` secrets.
+
+Second, the PostgreSQL Kubernetes authentication role was also bound to the
+`applicationbib-read` policy. This unnecessarily granted the PostgreSQL pod
+read access to the Firebase service-account credentials, which PostgreSQL
+does not require.
+
+Both Kubernetes authentication roles also had:
+
+```text
+token_max_ttl = 0s
+token_explicit_max_ttl = 0s
+```
+
+A value of `0s` means no explicit maximum lifetime was configured. This
+allowed Vault-issued tokens to remain renewable without a finite maximum
+lifetime, increasing the potential impact of a compromised pod or leaked
+Vault token.
+
+Together, these issues violated the principle of least privilege and
+increased the potential blast radius of a compromised workload or exposed
+Vault token.
+
+### What I did
+
+1. Reviewed the existing Vault policy:
+
+```bash
+vault policy read applicationbib-read
+```
+
+2. Reviewed both Kubernetes authentication roles:
+
+```bash
+vault read auth/kubernetes/role/applicationbib
+vault read auth/kubernetes/role/postgres
+```
+
+3. Reviewed the application Vault configuration and PostgreSQL StatefulSet to
+   determine the minimum secrets required by each workload.
+
+4. Confirmed that the application requires:
+
+```text
+secret/data/applicationbib/firebase
+secret/data/applicationbib/db
+```
+
+while PostgreSQL only requires:
+
+```text
+secret/data/applicationbib/db
+```
+
+5. Replaced the wildcard application policy with explicitly scoped paths:
+
+```hcl
+path "secret/data/applicationbib/firebase" {
+  capabilities = ["read"]
+}
+
+path "secret/data/applicationbib/db" {
+  capabilities = ["read"]
+}
+```
+
+6. Created a dedicated PostgreSQL policy containing only the database secret:
+
+```hcl
+path "secret/data/applicationbib/db" {
+  capabilities = ["read"]
+}
+```
+
+7. Applied the corrected policies:
+
+```bash
+vault policy write applicationbib-read applicationbib-read.hcl
+vault policy write postgres-read postgres-read.hcl
+```
+
+8. Updated the Kubernetes authentication roles so each workload receives
+   only the policy it requires and has a finite token lifetime:
+
+```bash
+vault write auth/kubernetes/role/applicationbib \
+  bound_service_account_names=applicationbib-sa \
+  bound_service_account_namespaces=default \
+  policies=applicationbib-read \
+  ttl=1h \
+  max_ttl=24h
+
+vault write auth/kubernetes/role/postgres \
+  bound_service_account_names=postgres-sa \
+  bound_service_account_namespaces=default \
+  policies=postgres-read \
+  ttl=1h \
+  max_ttl=24h
+```
+
+9. Restarted the `applicationbib` and `postgres` workloads to force
+   re-authentication using the corrected Vault roles.
+
+10. Verified that the application successfully obtained its required secrets
+    and started normally.
+
+11. Verified database connectivity through the application connection pool
+    (`HikariPool-1`).
+
+12. Verified `/actuator/health` returned `UP`.
+
+13. Verified PostgreSQL remained healthy and its readiness probe continued to
+    pass.
+
+14. Verified Firebase token authentication continued to work in the GitLab
+    CI/CD pipeline after the Vault policy changes.
+
+### What changed
+
+- `applicationbib-read` policy:
+  - Removed the wildcard `secret/data/applicationbib/*` permission.
+  - Restricted access to exactly:
+    - `secret/data/applicationbib/firebase`
+    - `secret/data/applicationbib/db`
+- Created a dedicated `postgres-read` policy containing access only to:
+  - `secret/data/applicationbib/db`
+- Updated the `postgres` Kubernetes authentication role to use
+  `postgres-read` instead of `applicationbib-read`.
+- Configured a `1h` token TTL and `24h` maximum token lifetime for both
+  Kubernetes authentication roles.
+- Removed the previous unlimited token-lifetime configuration.
+- Verified that Vault authentication, application startup, database
+  connectivity, health checks, and Firebase authentication remained
+  functional after the hardening.
+
+### Security impact
+
+The remediation reduces the blast radius of a compromised workload:
+
+- The application can no longer read arbitrary secrets under the
+  `applicationbib` prefix.
+- PostgreSQL can no longer read the application's Firebase credentials.
+- Vault tokens are now subject to a finite maximum lifetime and must
+  periodically re-authenticate.
+
+**Status:** Fixed — Vault policies and Kubernetes authentication roles now
+follow least-privilege access and enforce finite token lifetimes.
+
+
+
 
 ## Summary
 
@@ -754,3 +923,4 @@ they become part of the runtime through the Firebase Admin SDK.
 | #012 | **False positive** — kube-score incorrectly reported Vault NetworkPolicy selector as targeting no Pod | kube-score | ✅ Verified false positive |
 | #013 | **High architectural flaw** — backend trusted frontend authentication; business APIs were publicly accessible | Manual architecture review | ✅ Fixed |
 | #014 | **6 High CVEs** — vulnerable Firebase Admin SDK transitive dependencies (Netty, gRPC, OpenTelemetry) | Snyk | ✅ Fixed |
+| #015 | **Vault least-privilege hardening + finite token TTLs (Medium)** | Manual architectural review | ✅ Fixed |

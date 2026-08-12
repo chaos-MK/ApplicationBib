@@ -165,6 +165,8 @@ owasp-zap:
         zap-baseline.py \
           -t http://localhost:18080/project/getall \
           -r zap-report.html \
+          -J zap-report.json \
+          -c zap-rules.conf \
           -z "-config replacer.full_list\(0\).description=FirebaseAuth \
               -config replacer.full_list\(0\).enabled=true \
               -config replacer.full_list\(0\).matchtype=REQ_HEADER \
@@ -176,6 +178,23 @@ owasp-zap:
       set -e
 
       echo "ZAP exit code: $ZAP_EXIT_CODE"
+
+      # ---------------------------------------------------------
+      # Fine-grained gating on specific critical alert IDs,
+      # independent of the WARN/FAIL threshold in zap-rules.conf
+      # ---------------------------------------------------------
+
+      CRITICAL_ALERT_IDS="10202 10062 90022"
+
+      if [ -f zap-report.json ]; then
+        for ALERT_ID in $CRITICAL_ALERT_IDS; do
+          FOUND=$(jq --arg id "$ALERT_ID" '[.site[].alerts[] | select(.pluginid == $id)] | length' zap-report.json)
+          if [ "$FOUND" -gt 0 ]; then
+            echo "Critical alert $ALERT_ID found in scan results. Failing job."
+            exit 1
+          fi
+        done
+      fi
 
       if [ "$ZAP_EXIT_CODE" -eq 1 ]; then
         echo "ZAP scan found FAIL-level issues. Failing the job."
@@ -193,5 +212,6 @@ owasp-zap:
     when: always
     paths:
       - zap-report.html
+      - zap-report.json
       - app-pod-logs.txt
     expire_in: 7 days
