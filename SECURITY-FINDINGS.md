@@ -659,7 +659,7 @@ API response status: 200
 Authenticated API request succeeded.
 
 Starting authenticated OWASP ZAP scan...
-...
+
 FAIL-NEW: 0
 FAIL-INPROG: 0
 WARN-NEW: 0
@@ -670,6 +670,7 @@ PASS: 61
 
 ZAP exit code: 0
 ZAP scan completed.
+```
 
 ### What changed
 
