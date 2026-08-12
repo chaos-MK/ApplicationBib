@@ -11,11 +11,15 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 @Component
 public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
+	
+	private static final Logger logger = LoggerFactory.getLogger(FirebaseAuthenticationFilter.class);
 
     @Override
     protected void doFilterInternal(
@@ -51,12 +55,14 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
         } catch (Exception e) {
 
-            SecurityContextHolder.clearContext();
+        	logger.error("Firebase token verification failed", e);
 
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"error\":\"Invalid Firebase token\"}");
-            return;
+        	SecurityContextHolder.clearContext();
+
+        	response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        	response.setContentType("application/json");
+        	response.getWriter().write("{\"error\":\"Invalid Firebase token\"}");
+        	return;
         }
 
         filterChain.doFilter(request, response);

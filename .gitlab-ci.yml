@@ -108,12 +108,12 @@ owasp-zap:
           \"password\": \"${ZAP_TEST_PASSWORD}\",
           \"returnSecureToken\": true
         }")
-        
+
       echo "Firebase response fields:"
       echo "$FIREBASE_RESPONSE" | jq 'keys'
 
       ZAP_AUTH_TOKEN=$(echo "$FIREBASE_RESPONSE" | jq -r '.idToken')
-      
+
       echo "Token length: ${#ZAP_AUTH_TOKEN}"
       echo "JWT parts: $(echo "$ZAP_AUTH_TOKEN" | awk -F. '{print NF}')"
 
@@ -143,6 +143,8 @@ owasp-zap:
         echo "Authenticated API request failed."
         echo "Response body:"
         cat /tmp/api-response.txt
+        echo "Application pod logs:"
+        sudo /usr/local/bin/kubectl logs "$APP_POD" --tail=100 | tee app-pod-logs.txt
         exit 1
       fi
 
@@ -174,4 +176,5 @@ owasp-zap:
     when: always
     paths:
       - zap-report.html
+      - app-pod-logs.txt
     expire_in: 7 days
