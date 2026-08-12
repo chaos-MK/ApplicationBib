@@ -156,6 +156,7 @@ owasp-zap:
 
       echo "Starting authenticated OWASP ZAP scan..."
 
+      set +e
       podman run --rm \
         --userns=keep-id \
         --network host \
@@ -171,6 +172,22 @@ owasp-zap:
               -config replacer.full_list\(0\).replacement=Bearer%20${ZAP_AUTH_TOKEN} \
               -config replacer.full_list\(0\).initiators= \
               -config replacer.full_list\(0\).matchregex=false"
+      ZAP_EXIT_CODE=$?
+      set -e
+
+      echo "ZAP exit code: $ZAP_EXIT_CODE"
+
+      if [ "$ZAP_EXIT_CODE" -eq 1 ]; then
+        echo "ZAP scan found FAIL-level issues. Failing the job."
+        exit 1
+      elif [ "$ZAP_EXIT_CODE" -eq 2 ]; then
+        echo "ZAP scan found WARN-level issues only. Not failing the job, review zap-report.html."
+      elif [ "$ZAP_EXIT_CODE" -ne 0 ]; then
+        echo "ZAP scan exited with unexpected code $ZAP_EXIT_CODE."
+        exit 1
+      fi
+
+      echo "ZAP scan completed."
 
   artifacts:
     when: always
