@@ -1,3 +1,11 @@
+#Application Pod
+#     │
+#     ├── PostgreSQL :5432
+#     ├── Vault      :8200
+#     ├── DNS        :53
+#     └── HTTPS      :443 
+#the ports numbers is a stander
+
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -29,3 +37,6 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    - ports:
+        - port: 443
+          protocol: TCP
