@@ -599,11 +599,11 @@ match against `vault-0`. No functional change; policy was already
 correctly enforcing.
 
 
-## Finding #013 — Backend authentication enforced only by frontend (architectural security flaw)
+## Finding #013 — High: Backend authentication enforced only by frontend (architectural security flaw)
 
-**Date:** 2026-08-05  
-**Tool that found it:** Manual architectural review (during OWASP ZAP authenticated DAST preparation)  
-**Severity:** High  
+**Date:** 2026-08-05 → 2026-08-12
+**Tool that found it:** Manual architectural review (during OWASP ZAP authenticated DAST preparation)
+**Severity:** High
 **Components affected:** Spring Security configuration, protected business API endpoints
 
 ### Risk
@@ -618,32 +618,72 @@ frontend to restrict access.
 
 This allowed anyone to bypass the React application and send requests directly
 to the backend using tools such as `curl`, Postman, OWASP ZAP, or Burp Suite.
-The backend trusted the client instead of enforcing authentication itself,
-violating the principle that authorization decisions must always be made
-server-side.
+
+The backend therefore trusted the client instead of enforcing authentication
+server-side, violating the principle that authentication and authorization
+decisions must be enforced by the backend.
 
 ### What I did
 
 1. Reviewed the authentication architecture while preparing authenticated
    OWASP ZAP scanning.
-2. Verified that the backend contained no Firebase authentication filter,
-   JWT validation, or bearer token verification.
-3. Confirmed that sensitive business endpoints were publicly accessible
-   because they were configured with `permitAll()`.
-4. Planned an architectural redesign to enforce authentication in the
-   backend by validating Firebase ID tokens and protecting all business
-   endpoints with Spring Security.
+2. Confirmed that the backend did not previously validate Firebase ID tokens.
+3. Confirmed that protected business endpoints were effectively accessible
+   without backend authentication because the frontend was responsible for
+   enforcing access control.
+4. Implemented Firebase Authentication verification in the Spring Boot backend
+   using the Firebase Admin SDK.
+5. Added a backend authentication filter to extract and validate Firebase
+   ID tokens from the `Authorization: Bearer <token>` header.
+6. Updated Spring Security configuration so protected business endpoints
+   require successful backend authentication.
+7. Updated the Kubernetes/network configuration to allow the required HTTP
+   traffic to the application so the CI/CD authentication test and OWASP ZAP
+   could reach the protected API.
+8. Generated a real Firebase ID token in the GitLab CI/CD pipeline using the
+   Firebase Authentication API.
+9. Added an authenticated API integration test to verify that the generated
+   Firebase token is accepted by the deployed backend.
+10. Confirmed the authenticated API request returns HTTP `200`.
+11. Integrated the authenticated token into the OWASP ZAP scan so ZAP can
+    test authenticated application behavior.
+
+### Verification
+
+The GitLab CI/CD pipeline successfully demonstrated:
+
+```text
+Firebase ID token generated successfully.
+Testing authenticated API access...
+API response status: 200
+Authenticated API request succeeded.
+
+Starting authenticated OWASP ZAP scan...
+...
+FAIL-NEW: 0
+FAIL-INPROG: 0
+WARN-NEW: 0
+WARN-INPROG: 0
+INFO: 0
+IGNORE: 0
+PASS: 61
+
+ZAP exit code: 0
+ZAP scan completed.
 
 ### What changed
 
-- Authentication responsibility moved from the React frontend to the
-  Spring Boot backend.
-- Protected business endpoints will require successful backend
-  authentication instead of relying on client-side access control.
-- Authenticated OWASP ZAP scanning becomes possible once backend
-  authentication is implemented.
+- Added Firebase Admin SDK authentication to the backend.
+- Added `FirebaseAuthenticationFilter`.
+- Updated Spring Security configuration to require authentication for protected
+  business endpoints.
+- Updated Kubernetes/network configuration to allow the required HTTP traffic
+  to the application.
+- Added authenticated API verification to the GitLab CI/CD pipeline.
+- Added authenticated OWASP ZAP scanning.
 
-**Status:** Planned (architectural remediation in progress)
+**Status:** backend authentication is enforced server-side and
+authenticated API access is successfully verified in CI/CD.
 
 
 ## Finding #014 — High: Transitive CVEs introduced by Firebase Admin SDK
@@ -696,19 +736,20 @@ they become part of the runtime through the Firebase Admin SDK.
 
 
 ## Summary
-| Finding | CVEs/Issues Covered | Tool | Status |
-|---|---|---|---|
-| #001 | 38 | Snyk | ✅ Fixed |
-| #002 | 19 | Snyk | ✅ Fixed |
-| #003 | OS-level (2 High + hardening) | Trivy, Grype | ✅ Fixed |
-| #004 | False positive | Gitleaks | ✅ Resolved |
-| #005 | 4 | Snyk | ✅ Fixed |
-| #006 | 1 (+ 2 follow-ups: UID hardening, readOnlyRootFilesystem rollout fix) | Hadolint, kube-score | ✅ Fixed |
-| #007 | 1 (functional/architectural) | Manual (kube-proxy/minikube) | ✅ Resolved (documented trade-off) |
-| #008 | Kubernetes hardening (7 Critical + 1 Warning) | kube-score | ✅ Fixed (verified in CI; Warning accepted) |
-| #009 | 1 | Manual architectural review | ✅ Fixed |
-| #010 | Architectural security constraint (Vault Kubernetes auth) | RBAC review | ✅ Documented |
-| #011 | 4 (2 Critical + 2 High) | Snyk | ✅ Fixed |
-| #012 | 1 (false positive) | kube-score | ✅ Verified false positive |
-| #013 | 1 (backend authentication architecture flaw) | Manual architecture review | 🚧 Planned |
-| #014 | 6 High | Snyk | ✅ Fixed |
+
+| Finding | CVEs / Issues Covered | Tool | Status |
+| ------- | ---------------------- | ---- | ------ |
+| #001 | **38 Critical/High CVEs** — Spring Boot 3.4.3 dependency vulnerabilities | Snyk | ✅ Fixed |
+| #002 | **19 Critical/High CVEs** — Spring Web/Tomcat/Jackson vulnerabilities requiring Spring Boot 4 migration | Snyk | ✅ Fixed |
+| #003 | **2 High OS-level CVEs** + unnecessary runtime attack surface (`gnupg`) | Trivy, Grype | ✅ Fixed |
+| #004 | **False positive** — `sonar.projectKey` incorrectly detected as a secret | Gitleaks | ✅ Resolved |
+| #005 | **4 High CVEs** — vulnerable transitive `httpcore5-h2` and Bouncy Castle dependencies | Snyk | ✅ Fixed |
+| #006 | **Hadolint DL3066** + container UID/GID hardening + `readOnlyRootFilesystem` rollout issue | Hadolint, kube-score | ✅ Fixed |
+| #007 | **Kubernetes networking failure** — rootless Podman incompatible with kube-proxy Service routing | Manual / minikube | ✅ Resolved (documented trade-off) |
+| #008 | **7 Critical + 1 Warning** — missing Kubernetes resources, security contexts, probes, image policies, and NetworkPolicies | kube-score | ✅ Fixed (Warning accepted) |
+| #009 | **Critical NetworkPolicy gap** — Vault server had unrestricted pod-to-Vault access | Manual architectural review | ✅ Fixed |
+| #010 | **Vault Kubernetes auth constraint** — ServiceAccount token cannot be disabled without breaking Vault authentication | RBAC review | ✅ Documented trade-off |
+| #011 | **4 CVEs (2 Critical + 2 High)** — vulnerable Bouncy Castle `1.84` transitive dependency | Snyk | ✅ Fixed |
+| #012 | **False positive** — kube-score incorrectly reported Vault NetworkPolicy selector as targeting no Pod | kube-score | ✅ Verified false positive |
+| #013 | **High architectural flaw** — backend trusted frontend authentication; business APIs were publicly accessible | Manual architecture review | ✅ Fixed |
+| #014 | **6 High CVEs** — vulnerable Firebase Admin SDK transitive dependencies (Netty, gRPC, OpenTelemetry) | Snyk | ✅ Fixed |
