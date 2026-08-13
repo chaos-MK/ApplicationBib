@@ -936,6 +936,210 @@ The remediation reduces the blast radius of a compromised workload:
 follow least-privilege access and enforce finite token lifetimes.
 
 
+## Finding #016 — Medium: Vault KV Secret Versioning, Retention Limits, and CAS Enforcement
+
+**Date:** 2026-08-13
+**Tool that found it:** Manual architectural review (`vault kv metadata`)
+**Severity:** Medium
+**Component:** HashiCorp Vault KV v2 — `secret/applicationbib/firebase` and `secret/applicationbib/db`
+
+### Risk
+
+A review of the application's Vault KV v2 secrets identified that the Firebase service-account secret and database credentials did not have explicit version-retention limits or Check-And-Set (CAS) enforcement.
+
+Without a maximum version count, repeated updates could retain an unbounded number of historical secret versions. This increases storage usage and unnecessarily extends the lifetime of old credential versions.
+
+Without a defined retention period, historical secret versions could remain available indefinitely, increasing the amount of sensitive credential material retained by Vault.
+
+Without CAS enforcement, a secret could be overwritten without requiring the writer to explicitly specify the expected current version. This creates a risk of accidental or unintended overwrites during secret rotation or concurrent administrative operations.
+
+The affected secrets were:
+
+- `secret/applicationbib/firebase`
+- `secret/applicationbib/db`
+
+### What I did
+
+1. Reviewed the existing KV metadata for both application secrets:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- vault kv metadata get secret/applicationbib/firebase`
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- vault kv metadata get secret/applicationbib/db`
+
+2. Configured both secrets with a maximum of **5 retained versions**.
+
+3. Configured automatic deletion of old secret versions after **2160 hours (90 days)**.
+
+4. Enabled **CAS enforcement** using `-cas-required=true`.
+
+5. Applied the configuration:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- vault kv metadata put -max-versions=5 -delete-version-after=2160h -cas-required=true secret/applicationbib/firebase`
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- vault kv metadata put -max-versions=5 -delete-version-after=2160h -cas-required=true secret/applicationbib/db`
+
+6. Re-read the metadata to verify the configuration:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- vault kv metadata get secret/applicationbib/firebase`
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- vault kv metadata get secret/applicationbib/db`
+
+7. Confirmed both secrets report:
+
+    `cas_required          true`
+    `delete_version_after  2160h0m0s`
+    `max_versions          5`
+
+### What changed
+
+- `secret/applicationbib/firebase`
+  - Maximum retained versions: **5**
+  - Automatic deletion after: **90 days**
+  - CAS enforcement: **enabled**
+
+- `secret/applicationbib/db`
+  - Maximum retained versions: **5**
+  - Automatic deletion after: **90 days**
+  - CAS enforcement: **enabled**
+
+### Security impact
+
+The remediation limits the number and lifetime of historical secret versions retained by Vault and requires CAS-aware writes.
+
+This reduces unnecessary exposure of old credentials, prevents uncontrolled version growth, and provides safer secret rotation and update semantics.
+
+**Status:** Fixed — Vault KV secrets now enforce bounded version retention, 90-day cleanup, and CAS-required writes.
+
+
+## Finding #017 — Medium: Vault Audit Logging Was Disabled
+
+**Date:** 2026-08-13
+**Tool that found it:** Manual architectural review (`vault audit list`)
+**Severity:** Medium
+**Component:** HashiCorp Vault audit subsystem
+
+### Risk
+
+A manual review of the Vault security configuration identified that no audit devices were enabled.
+
+Running:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- vault audit list`
+
+initially returned:
+
+    `No audit devices are enabled.`
+
+Without an enabled Vault audit device, Vault API operations such as authentication attempts, secret reads, policy operations, and other security-relevant requests are not recorded by Vault's audit subsystem.
+
+This reduces the ability to investigate unauthorized access, detect suspicious secret access, reconstruct security events, and perform forensic analysis after a security incident.
+
+### Investigation
+
+The Vault pod stores persistent data under `/vault/data`, which is backed by the persistent volume claim `data-vault-0`.
+
+A dedicated audit directory was created under this persistent location.
+
+The initial directory permissions were too restrictive and prevented Vault from writing the audit log.
+
+The Vault process was verified with:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- whoami`
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- id`
+
+The Vault process runs as:
+
+    `vault`
+    `uid=100(vault) gid=1000(vault) groups=1000(vault)`
+
+The audit directory initially had restrictive permissions:
+
+    `Access: (0600/drw-------)`
+    `Uid: (100/vault)`
+    `Gid: (1000/vault)`
+
+### What I did
+
+1. Created the dedicated audit directory:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- mkdir -p /vault/data/audit`
+
+2. Corrected the directory permissions:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- chmod 700 /vault/data/audit`
+
+3. Verified the resulting permissions:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- stat /vault/data/audit`
+
+    The directory was confirmed as:
+
+    `Access: (0700/drwx------)`
+    `Uid: (100/vault)`
+    `Gid: (1000/vault)`
+
+4. Verified that the Vault process could write to the directory by creating a temporary test file:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- sh -c 'touch /vault/data/audit/test.log'`
+
+5. Removed the temporary test file:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- rm /vault/data/audit/test.log`
+
+6. Enabled the file-based Vault audit device using the persistent Vault volume:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- vault audit enable file file_path=/vault/data/audit/audit.log`
+
+    Vault returned:
+
+    `Success! Enabled the file audit device at: file/`
+
+7. Verified that the audit device is enabled:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- vault audit list`
+
+    Result:
+
+    `Path     Type    Description`
+    `----     ----    -----------`
+    `file/    file    n/a`
+
+8. Generated a real Vault secret-read operation to exercise the audit device:
+
+    `sudo /usr/local/bin/kubectl exec -n vault vault-0 -- vault kv get secret/applicationbib/firebase`
+
+    The request successfully returned the Firebase secret, confirming that Vault remained operational after enabling the audit device.
+
+### What changed
+
+- Created `/vault/data/audit` on the persistent Vault data volume.
+- Corrected the directory permissions to `0700` for the Vault process.
+- Enabled the Vault `file/` audit device.
+- Configured the audit log at:
+
+    `/vault/data/audit/audit.log`
+
+- Verified the audit device is active with `vault audit list`.
+- Verified normal Vault secret access continues to function after enabling auditing.
+
+### Security impact
+
+Vault now maintains an audit trail of Vault API activity, providing visibility into authentication, secret access, policy operations, and other security-relevant requests.
+
+The audit log is stored under the persistent `/vault/data` volume rather than ephemeral container storage, so it survives Vault pod restarts.
+
+Vault automatically HMACs sensitive fields such as tokens and secret values in audit records, preventing the actual secret contents from being stored directly in plaintext in the audit log.
+
+### Operational consideration
+
+The audit log is currently stored on the same persistent volume as the Vault data backend.
+
+Vault's file audit device does not provide automatic log rotation. For a production deployment, audit-log rotation or forwarding to a centralized logging system should be considered to prevent audit logs from consuming the Vault storage volume.
+
+**Status:** Fixed — Vault audit logging is enabled, writable, persistent, and verified.
+
+
 
 
 ## Summary
@@ -957,3 +1161,5 @@ follow least-privilege access and enforce finite token lifetimes.
 | #013 | **High architectural flaw** — backend trusted frontend authentication; business APIs were publicly accessible | Manual architecture review | ✅ Fixed |
 | #014 | **6 High CVEs** — vulnerable Firebase Admin SDK transitive dependencies (Netty, gRPC, OpenTelemetry) | Snyk | ✅ Fixed |
 | #015 | **Vault least-privilege hardening + finite token TTLs (Medium)** | Manual architectural review | ✅ Fixed |
+| #016 | **Vault KV secret versioning/retention limits + CAS enforcement (Medium)** | Manual architectural review | ✅ Fixed |
+| #017 | **Vault audit logging enabled (Medium)** | Manual architectural review | ✅ Fixed |
