@@ -184,7 +184,7 @@ owasp-zap:
       # independent of the WARN/FAIL threshold in zap-rules.conf
       # ---------------------------------------------------------
 
-      CRITICAL_ALERT_IDS="10202 10062 90022"
+      CRITICAL_ALERT_IDS="40018 40022 90019 90020 90025 90023 90022 10062 40012"
 
       if [ -f zap-report.json ]; then
         for ALERT_ID in $CRITICAL_ALERT_IDS; do
