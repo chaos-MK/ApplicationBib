@@ -936,7 +936,127 @@ The remediation reduces the blast radius of a compromised workload:
 follow least-privilege access and enforce finite token lifetimes.
 
 
-## Finding #016 — Medium: Vault KV Secret Versioning, Retention Limits, and CAS Enforcement
+## Finding #016 — ZAP Policy Configuration and Fine-Grained Alert Gating
+
+**Date:** 2026-08-12
+**Tool:** OWASP ZAP
+**Severity:** Medium (security-control hardening)
+
+### Risk
+
+The initial OWASP ZAP integration relied primarily on the baseline scan
+without explicitly documenting which ZAP security rules were considered
+important enough to gate the CI/CD pipeline.
+
+For an authenticated API, treating every ZAP alert identically can create
+two problems:
+
+- Important security findings may not be enforced consistently as pipeline
+  blockers.
+- Lower-value or informational findings can create unnecessary pipeline
+  failures and reduce the usefulness of the security gate.
+
+A controlled ZAP policy was therefore introduced so that security-relevant
+alerts are explicitly selected and their expected severity is defined.
+
+### What I did
+
+1. Reviewed the available OWASP ZAP alert rules using the official ZAP
+   alert reference:
+
+   https://www.zaproxy.org/docs/alerts/
+
+2. Identified security-relevant alert categories for the application,
+   particularly:
+
+   - SQL Injection
+   - PostgreSQL-specific SQL Injection
+   - Server-Side Code Injection
+   - Remote OS Command Injection
+   - Expression Language Injection
+   - XML External Entity (XXE)
+   - Application Error Disclosure
+   - PII Disclosure
+   - Reflected Cross-Site Scripting
+
+3. Configured the ZAP scan policy so the selected security rules are
+   explicitly evaluated during the CI/CD scan.
+
+4. Added fine-grained pipeline gating based on selected ZAP alert IDs
+   instead of treating every ZAP message as a pipeline failure.
+
+5. Kept lower-priority informational or non-blocking findings from
+   unnecessarily failing the deployment pipeline.
+
+6. Verified the configured ZAP policy against the authenticated scan of
+   the deployed application.
+
+### Selected ZAP Alert IDs
+
+The selected security controls include:
+
+- `40018` — SQL Injection
+- `40022` — SQL Injection (PostgreSQL)
+- `90019` — Server Side Code Injection
+- `90020` — Remote OS Command Injection
+- `90025` — Expression Language Injection
+- `90023` — XML External Entity (XXE)
+- `90022` — Application Error Disclosure
+- `10062` — PII Disclosure
+- `40012` — Cross Site Scripting (Reflected)
+
+The complete alert definitions are maintained in the official OWASP ZAP
+alert reference.
+
+### CI/CD Verification
+
+The authenticated OWASP ZAP scan was executed against the deployed
+application after Firebase authentication was integrated.
+
+The pipeline successfully reported:
+
+    FAIL-NEW: 0
+    FAIL-INPROG: 0
+    WARN-NEW: 0
+    WARN-INPROG: 0
+    INFO: 0
+    IGNORE: 0
+    PASS: 61
+
+The ZAP process exited successfully with exit code `0`.
+
+This confirms that the configured security policy and selected alert
+gates did not identify any new blocking findings in the deployed
+application.
+
+### What changed
+
+- Documented the ZAP security policy and selected alert IDs.
+- Defined security-relevant ZAP rules that should be treated as pipeline
+  security gates.
+- Added fine-grained gating based on specific ZAP alert IDs.
+- Kept non-security-critical or informational ZAP results from causing
+  unnecessary pipeline failures.
+- Documented the official ZAP alert reference used to identify and classify
+  the selected rules.
+
+### Security impact
+
+The ZAP integration now provides a controlled DAST security gate rather
+than simply executing a generic baseline scan.
+
+The pipeline explicitly checks for selected high-value attack classes,
+including injection, code execution, XXE, authentication-related
+information disclosure, PII disclosure, and reflected XSS.
+
+This makes the DAST stage predictable, auditable, and aligned with the
+application's actual security requirements.
+
+**Status:** Fixed — ZAP policy configuration and fine-grained alert-ID
+pipeline gating are implemented and verified in CI/CD.
+
+
+## Finding #017 — Medium: Vault KV Secret Versioning, Retention Limits, and CAS Enforcement
 
 **Date:** 2026-08-13
 **Tool that found it:** Manual architectural review (`vault kv metadata`)
@@ -1011,7 +1131,7 @@ This reduces unnecessary exposure of old credentials, prevents uncontrolled vers
 **Status:** Fixed — Vault KV secrets now enforce bounded version retention, 90-day cleanup, and CAS-required writes.
 
 
-## Finding #017 — Medium: Vault Audit Logging Was Disabled
+## Finding #018 — Medium: Vault Audit Logging Was Disabled
 
 **Date:** 2026-08-13
 **Tool that found it:** Manual architectural review (`vault audit list`)
@@ -1161,5 +1281,6 @@ Vault's file audit device does not provide automatic log rotation. For a product
 | #013 | **High architectural flaw** — backend trusted frontend authentication; business APIs were publicly accessible | Manual architecture review | ✅ Fixed |
 | #014 | **6 High CVEs** — vulnerable Firebase Admin SDK transitive dependencies (Netty, gRPC, OpenTelemetry) | Snyk | ✅ Fixed |
 | #015 | **Vault least-privilege hardening + finite token TTLs (Medium)** | Manual architectural review | ✅ Fixed |
-| #016 | **Vault KV secret versioning/retention limits + CAS enforcement (Medium)** | Manual architectural review | ✅ Fixed |
-| #017 | **Vault audit logging enabled (Medium)** | Manual architectural review | ✅ Fixed |
+| #016 | **OWASP ZAP policy/rule configuration + fine-grained alert-ID pipeline gating (Medium)** | OWASP ZAP / Manual security review | ✅ Fixed |
+| #017 | **Vault KV secret versioning/retention limits + CAS enforcement (Medium)** | Manual architectural review | ✅ Fixed |
+| #018 | **Vault audit logging enabled (Medium)** | Manual architectural review | ✅ Fixed |
