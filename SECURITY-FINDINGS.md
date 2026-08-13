@@ -9,21 +9,31 @@ manual reviews are used to identify architectural and design-level
 security issues that automated scanners cannot detect.
 
 For DAST alterts : The ZAP alert reference for IDs: https://www.zaproxy.org/docs/alerts/
-Injection (most critical for an API with a real database):
+
+
++Injection (most critical for an API with a real database):
 
 40018 — SQL Injection (generic)
+
 40022 — SQL Injection, PostgreSQL-specific (matches your actual DB)
+
 90019 — Server Side Code Injection
+
 90020 — Remote OS Command Injection
+
 90025 — Expression Language Injection (relevant to Spring, which uses SpEL internally)
+
 90023 — XML External Entity (XXE) Attack
 
-Info disclosure that matters for an auth-gated API:
+
++Info disclosure that matters for an auth-gated API:
 
 90022 — Application Error Disclosure (stack traces leaking internals — you already saw this PASS, worth keeping it a hard gate rather than just a pass)
+
 10062 — PII Disclosure (relevant since this is a library/book-tracking app likely handling user data)
 
-Cross-site scripting (lower priority for a pure JSON API, but worth including if any endpoint ever reflects input):
+
++Cross-site scripting (lower priority for a pure JSON API, but worth including if any endpoint ever reflects input):
 
 40012 — Cross Site Scripting (Reflected)
 
