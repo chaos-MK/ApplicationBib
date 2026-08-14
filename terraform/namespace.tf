@@ -3,3 +3,8 @@ resource "kubernetes_namespace" "applicationbib" {
     name = "applicationbib"
   }
 }
+resource "kubernetes_namespace" "monitoring" {
+  metadata {
+    name = "monitoring"
+  }
+}

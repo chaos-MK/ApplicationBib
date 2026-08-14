@@ -30,12 +30,12 @@ resource "kubernetes_stateful_set" "postgres" {
             export POSTGRES_PASSWORD="{{ .Data.data.password }}"
             {{- end -}}
           EOT
-          "vault.hashicorp.com/role" = "postgres"
+          "vault.hashicorp.com/role"                           = "postgres"
         }
       }
 
       spec {
-        service_account_name           = "postgres-sa"
+        service_account_name            = "postgres-sa"
         automount_service_account_token = true
         enable_service_links            = false
 

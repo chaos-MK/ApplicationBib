@@ -31,7 +31,8 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth                .requestMatchers("/error").permitAll()
-                .requestMatchers("/actuator/health").permitAll() 
+                .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/actuator/prometheus").permitAll()
                 .requestMatchers("/cohort/**", "/project/**", "/company/**", "/users/**","/session/**").authenticated()
                 .requestMatchers(
                     "/swagger-ui/**",
