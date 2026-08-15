@@ -17,6 +17,13 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9187
   egress:
     - to:
         - namespaceSelector: {}

@@ -25,6 +25,11 @@ spec:
           export POSTGRES_USER="{{ .Data.data.username }}"
           export POSTGRES_PASSWORD="{{ .Data.data.password }}"
           {{- end -}}
+        vault.hashicorp.com/agent-inject-secret-exporter-dsn: "secret/data/applicationbib/db"
+        vault.hashicorp.com/agent-inject-template-exporter-dsn: |
+          {{- with secret "secret/data/applicationbib/db" -}}
+          export DATA_SOURCE_NAME="postgresql://{{ .Data.data.username }}:{{ .Data.data.password }}@localhost:5432/{{ .Data.data.url | regexReplaceAll ".*\\/([^\\/]+)$" "${1}" }}?sslmode=disable"
+          {{- end -}}
     spec:
       serviceAccountName: postgres-sa
       containers:
@@ -36,7 +41,6 @@ spec:
             - . /vault/secrets/db-creds && exec docker-entrypoint.sh postgres
           ports:
             - containerPort: 5432
-
           readinessProbe:
             exec:
               command:
@@ -47,19 +51,22 @@ spec:
                 - "5432"
             initialDelaySeconds: 10
             periodSeconds: 10
-
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop:
                 - ALL
+              add:
+                - CHOWN
+                - FOWNER
+                - DAC_OVERRIDE
+                - SETUID
+                - SETGID
             # readOnlyRootFilesystem intentionally omitted — accepted trade-off,
             # official image needs root at startup to chown data dir (Finding #008)
-
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
-
           resources:
             requests:
               cpu: "250m"
@@ -69,7 +76,27 @@ spec:
               cpu: "1"
               memory: "512Mi"
               ephemeral-storage: "1Gi"
-
+        - name: postgres-exporter
+          image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - . /vault/secrets/exporter-dsn && exec postgres_exporter
+          ports:
+            - containerPort: 9187
+              name: metrics
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
       volumes:
         - name: postgres-storage
           persistentVolumeClaim:

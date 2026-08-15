@@ -2,10 +2,14 @@ apiVersion: v1
 kind: Service
 metadata:
   name: applicationbib
+  namespace: default
+  labels:
+    app: applicationbib
 spec:
   type: ClusterIP
   selector:
     app: applicationbib
   ports:
-    - port: 8080
+    - name: http
+      port: 8080
       targetPort: 8080
