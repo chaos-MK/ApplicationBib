@@ -28,3 +28,27 @@ resource "helm_release" "kube_prometheus_stack" {
     kubernetes_namespace.monitoring
   ]
 }
+resource "kubernetes_manifest" "podman_exporter_service" {
+  manifest = yamldecode(file("${path.module}/podman-exporter-service.yaml"))
+
+  depends_on = [
+    kubernetes_namespace.monitoring
+  ]
+}
+
+resource "kubernetes_manifest" "podman_exporter_endpoints" {
+  manifest = yamldecode(file("${path.module}/podman-exporter-endpoints.yaml"))
+
+  depends_on = [
+    kubernetes_manifest.podman_exporter_service
+  ]
+}
+
+resource "kubernetes_manifest" "podman_exporter_servicemonitor" {
+  manifest = yamldecode(file("${path.module}/podman-exporter-servicemonitor.yaml"))
+
+  depends_on = [
+    kubernetes_manifest.podman_exporter_service,
+    helm_release.kube_prometheus_stack
+  ]
+}
