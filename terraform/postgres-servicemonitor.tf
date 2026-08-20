@@ -1,0 +1,35 @@
+resource "kubernetes_manifest" "postgres_servicemonitor" {
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "ServiceMonitor"
+
+    metadata = {
+      name      = "postgres"
+      namespace = "monitoring"
+
+      labels = {
+        release = "kube-prometheus-stack"
+      }
+    }
+
+    spec = {
+      namespaceSelector = {
+        matchNames = ["default"]
+      }
+
+      selector = {
+        matchLabels = {
+          app = "postgres"
+        }
+      }
+
+      endpoints = [
+        {
+          port     = "metrics"
+          path     = "/metrics"
+          interval = "15s"
+        }
+      ]
+    }
+  }
+}
