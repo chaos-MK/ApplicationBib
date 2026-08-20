@@ -9,7 +9,7 @@ resource "helm_release" "kube_prometheus_stack" {
         enabled = true
         "grafana.ini" = {
           server = {
-            root_url            = "http://192.168.49.2:31573/grafana/"
+            root_url            = var.grafana_root_url
             serve_from_sub_path = true
           }
         }
