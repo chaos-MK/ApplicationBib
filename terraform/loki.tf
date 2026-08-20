@@ -60,3 +60,12 @@ resource "helm_release" "loki" {
     kubernetes_namespace.monitoring
   ]
 }
+
+resource "kubernetes_manifest" "loki_servicemonitor" {
+  manifest = yamldecode(file("${path.module}/loki-servicemonitor.yaml"))
+
+  depends_on = [
+    helm_release.loki,
+    helm_release.kube_prometheus_stack
+  ]
+}
