@@ -1,0 +1,35 @@
+resource "kubernetes_manifest" "applicationbib_servicemonitor" {
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "ServiceMonitor"
+
+    metadata = {
+      name      = "applicationbib"
+      namespace = "monitoring"
+
+      labels = {
+        release = "kube-prometheus-stack"
+      }
+    }
+
+    spec = {
+      namespaceSelector = {
+        matchNames = ["default"]
+      }
+
+      selector = {
+        matchLabels = {
+          app = "applicationbib"
+        }
+      }
+
+      endpoints = [
+        {
+          port     = "http"
+          path     = "/actuator/prometheus"
+          interval = "15s"
+        }
+      ]
+    }
+  }
+}
