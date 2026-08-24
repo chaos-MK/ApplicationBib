@@ -1260,6 +1260,52 @@ Vault's file audit device does not provide automatic log rotation. For a product
 **Status:** Fixed — Vault audit logging is enabled, writable, persistent, and verified.
 
 
+## Finding #019 — Critical/High: 2 CVEs via outdated Netty (transitive, firebase-admin)
+
+**Date:** 2026-08-24
+**Tool that found it:** Snyk
+**Severity:** Critical (1) + High (1)
+**Packages affected:** io.netty:netty-handler@4.2.15.Final,
+io.netty:netty-codec-http@4.2.16.Final
+(both transitively via com.google.firebase:firebase-admin@9.7.1)
+
+### Risk
+2 of N total Snyk findings traced back to a single root cause: outdated
+Netty versions pulled in transitively by `firebase-admin@9.7.1`. Details:
+- **[Critical] Improper Check for Unusual or Exceptional Conditions**
+  (SNYK-JAVA-IONETTY-19005879) in `netty-handler@4.2.15.Final` — malformed
+  or unexpected input handling could lead to abnormal behavior or denial
+  of service.
+- **[High] Use of Cache Containing Sensitive Information**
+  (SNYK-JAVA-IONETTY-18956131) in `netty-codec-http@4.2.16.Final` —
+  sensitive data may be retained in a cache and exposed to unauthorized
+  access.
+
+Both issues are fixed upstream in Netty 4.2.17.Final (and backported to
+4.1.137.Final), but `firebase-admin@9.7.1` still pins the vulnerable
+versions transitively, so a direct dependency override is required.
+
+### What I did
+1. Confirmed no direct upgrade/patch was offered by Snyk for either issue
+   (fix requires overriding the transitive version).
+2. Checked for a newer `firebase-admin` release that bumps Netty
+   internally — [confirm result before filling in].
+3. Added explicit `dependencyManagement` entries pinning
+   `netty-handler` and `netty-codec-http` to `4.2.17.Final`.
+4. Ran `mvn dependency:tree -Dincludes=io.netty` to confirm the pinned
+   versions were actually resolved (not shadowed by another transitive
+   pin).
+5. Re-ran `snyk test --severity-threshold=high` and confirmed both
+   findings resolved.
+
+### What changed
+- `pom.xml`: added `dependencyManagement` entries overriding
+  `io.netty:netty-handler` → `4.2.17.Final` and
+  `io.netty:netty-codec-http` → `4.2.17.Final`
+
+**Status:** Fixed
+
+
 
 
 ## Summary
@@ -1284,3 +1330,4 @@ Vault's file audit device does not provide automatic log rotation. For a product
 | #016 | **OWASP ZAP policy/rule configuration + fine-grained alert-ID pipeline gating (Medium)** | OWASP ZAP / Manual security review | ✅ Fixed |
 | #017 | **Vault KV secret versioning/retention limits + CAS enforcement (Medium)** | Manual architectural review | ✅ Fixed |
 | #018 | **Vault audit logging enabled (Medium)** | Manual architectural review | ✅ Fixed |
+| #019 | **2 Critical/High CVEs** — Netty 4.2.15/4.2.16 vulnerabilities (via firebase-admin) | Snyk | ✅ Fixed |

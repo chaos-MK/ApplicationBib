@@ -37,7 +37,7 @@ resource "kubernetes_deployment_v1" "applicationbib" {
 
       spec {
         service_account_name            = "applicationbib-sa"
-        automount_service_account_token = false
+        automount_service_account_token = true
         enable_service_links            = false
 
         image_pull_secrets {
