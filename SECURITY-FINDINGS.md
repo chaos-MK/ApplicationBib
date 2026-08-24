@@ -1306,6 +1306,91 @@ Vault's file audit device does not provide automatic log rotation. For a product
 **Status:** ✅ Fixed & Verified
 
 
+## Finding #020 — High: httpcore5 DoS + outdated JDK/Alpine base image (Trivy + Grype)
+**Date:** 2026-08-24
+**Tool that found it:** Trivy + Grype
+**Severity:** High (2 root causes, multiple CVEs)
+**Packages affected:**
+- org.apache.httpcomponents.core5:httpcore5@5.3.6 (transitively via org.apache.httpcomponents.client5:httpclient5, pulled in via firebase-admin/spring-cloud-vault dependency chain)
+- eclipse-temurin:21-jre-alpine@sha256:3f08b13... (base image, JDK 21.0.11+10-LTS, Alpine 3.23.5)
+
+### Risk
+Two unrelated root causes surfaced together in CI image scans:
+
+- **[High] Denial of Service via excessive HTTP headers**
+  (CVE-2026-54399) in `httpcore5@5.3.6` — fixed upstream in 5.4.3.
+- **[High/Medium, multiple CVEs]** in bundled OpenJDK 21.0.11+10 shipped inside the `eclipse-temurin:21-jre-alpine` base image (CVE-2026-41254, CVE-2026-47063, CVE-2026-60147, CVE-2026-47021, CVE-2026-46968, CVE-2026-47027, CVE-2026-46917) — fixed in JDK builds ≥21.0.12.
+- Related Medium findings bundled in the same scans: `httpclient5@5.5.2` (fix 5.6.3), `log4j-api@2.25.4` (fix 2.25.5).
+
+### What I did
+1. Ran Trivy against `app/app.jar` — flagged `httpcore5@5.3.6` (HIGH, CVE-2026-54399).
+2. Ran Grype against the full image (`--fail-on high`) — confirmed the same `httpcore5` finding plus multiple HIGH findings against the bundled OpenJDK binary, unrelated to the jar itself.
+3. Ran `mvn dependency:tree -Dincludes=org.apache.httpcomponents.core5:httpcore5` — confirmed an existing `dependencyManagement` override only pinned `httpcore5-h2`, not the base `httpcore5` artifact, so the vulnerable transitive version was still resolving.
+4. Added `dependencyManagement` entries pinning `httpcore5` to `5.4.3`, `httpclient5` to `5.6.3`, and `log4j-api` to `2.25.5`. Re-ran the tree check to confirm clean resolution.
+5. Identified that `apk update && apk upgrade` in the Dockerfile only patches Alpine *packages*, not the JDK — Temurin ships its own JDK build outside apk, so the base image tag itself needed bumping.
+6. Bumped the runtime base image from the pinned `21-jre-alpine@sha256:...` digest (JDK 21.0.11) to `eclipse-temurin:21.0.12_8-jre-alpine-3.24`, deliberately dropping the stale digest pin to avoid re-freezing on an outdated build.
+7. Rebuilt and re-ran both scanners — all `httpcore5`/`httpclient5`/`log4j-api`/`openjdk` findings cleared.
+
+### What changed
+- `pom.xml`:
+  - Added `dependencyManagement` entries pinning `org.apache.httpcomponents.core5:httpcore5` to `5.4.3`, `org.apache.httpcomponents.client5:httpclient5` to `5.6.3`, and `org.apache.logging.log4j:log4j-api` to `2.25.5`.
+- `Dockerfile`:
+  - Changed runtime base image from `eclipse-temurin:21-jre-alpine@sha256:3f08b13...` (JDK 21.0.11) to `eclipse-temurin:21.0.12_8-jre-alpine-3.24`.
+
+### Verification
+- `mvn dependency:tree -Dincludes=org.apache.httpcomponents.core5:httpcore5` → resolves `5.4.3`
+- `mvn dependency:tree -Dincludes=org.apache.httpcomponents.client5:httpclient5` → resolves `5.6.3`
+- `trivy image app:test` → `httpcore5` finding cleared
+- `grype app:test --fail-on high` → 0 openjdk/httpcore5/httpclient5 matches; **10 remaining matches are unrelated OS-package findings (see Finding #021)**
+
+**Status:** ✅ Fixed & Verified
+
+
+## Finding #021 — Medium/High: unpatched Alpine OS packages (libssl3/libcrypto3/openssl, coreutils, busybox)
+**Date:** 2026-08-24
+**Tool that found it:** Grype
+**Severity:** High (1) + Medium (2)
+**Packages affected:**
+- libcrypto3 / libssl3 / openssl@3.5.7-r0 (Alpine 3.24 base image package)
+- coreutils / coreutils-env / coreutils-fmt / coreutils-sha512sum@9.11-r0
+- busybox / busybox-binsh / ssl_client@1.37.0-r31
+
+### Risk
+- **[High] CVE-2026-14456** — Unbounded Memory Growth in QUIC Server Incoming Channel Queue (OpenSSL). Confirmed via upstream OpenSSL Security Advisory (13 Aug 2026): severity officially rated **Low** by OpenSSL; fix targeted for OpenSSL 3.5.8, which has not yet been released. No distro can package a fix that doesn't exist upstream. Service does not run a QUIC listener, further limiting real exposure.
+- **[Medium] CVE-2016-2781** — `chmod --reference` symlink race in coreutils. Requires local shell access; longstanding accepted-risk/won't-fix across most distros.
+- **[Medium] CVE-2025-60876** — busybox. No fixed Alpine package available yet as of 3.24.
+
+### What I did
+1. Confirmed via Grype's own status column (`by status: 0 fixed, 10 not-fixed`) that none of these findings have a published patch to move to.
+2. Researched CVE-2026-14456 directly against the OpenSSL oss-security mailing list advisory — confirmed Low severity rating and no released fix version.
+3. Evaluated downgrade path: OpenSSL 3.4/3.0/1.1.1/1.0.2 are unaffected, but downgrading would mean losing all subsequent patches for a net-negative security trade; rejected.
+4. Evaluated base-distro swap (e.g. Debian-based Temurin image) as a way to potentially get an already-patched openssl sooner; deferred as disproportionate to a Low-severity, non-exploitable-in-this-context finding.
+5. Added time-boxed ignore rules to `.grype.yaml` and `.trivyignore` rather than blocking the pipeline indefinitely on non-existent fixes.
+6. Re-ran both scanners to confirm the pipeline no longer fails, while the underlying (unfixable) findings remain fully visible in scan output, just excluded from exit-code enforcement.
+
+### What changed
+- Added `.grype.yaml`:
+```yaml
+  ignore:
+    - vulnerability: CVE-2026-14456
+      reason: "OpenSSL upstream rates this Low; fix ships in 3.5.8 which hasn't been released. Revisit weekly."
+    - vulnerability: CVE-2016-2781
+      reason: "Requires local shell access; accepted risk, longstanding won't-fix across distros."
+    - vulnerability: CVE-2025-60876
+      reason: "No fixed Alpine package available yet. Revisit weekly."
+```
+- Added `.trivyignore` with matching CVE entries and comments.
+- Updated `image-scan-grype` CI job to pass `--config .grype.yaml`.
+- Updated `image-scan-trivy` CI job to pass `--ignorefile .trivyignore`.
+
+### Verification
+- `grype app:test --fail-on high --config .grype.yaml` → `0 vulnerability matches`, `10 ignored`, exit code 0
+- `trivy image --ignorefile .trivyignore --severity CRITICAL,HIGH app:test` → `No vulnerabilities found`
+
+**Status:** ⚠️ Accepted Risk (time-boxed) — no upstream fix available; revisit weekly until Alpine/OpenSSL ship a patched build.
+
+
+
 
 
 ## Summary
@@ -1331,3 +1416,5 @@ Vault's file audit device does not provide automatic log rotation. For a product
 | #017 | **Vault KV secret versioning/retention limits + CAS enforcement (Medium)** | Manual architectural review | ✅ Fixed |
 | #018 | **Vault audit logging enabled (Medium)** | Manual architectural review | ✅ Fixed |
 | #019 | **3 Critical/High CVEs** — Netty 4.2.15/4.2.16 (via firebase-admin) & Micrometer-core 1.16.6 (via micrometer-registry-prometheus & spring-boot-starter-actuator) | Snyk | ✅ Fixed |
+| #020 | **High** — httpcore5 DoS (CVE-2026-54399) + outdated bundled JDK 21.0.11 (7 CVEs) via base image | Trivy + Grype | ✅ Fixed |
+| #021 | **High/Medium** — openssl QUIC memory growth (CVE-2026-14456, no upstream fix yet), coreutils/busybox (no fix available) | Grype | ⚠️ Accepted Risk (ignored, revisit weekly) |

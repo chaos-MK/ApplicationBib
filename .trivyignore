@@ -1,0 +1,13 @@
+# CVE-2026-14456 - openssl/libssl3/libcrypto3
+# Upstream OpenSSL rates this Low severity; no 3.5.8 release exists yet to patch into.
+# https://www.openwall.com/lists/oss-security/2026/08/13/4
+# Revisit: check weekly, remove once Alpine ships a patched openssl package.
+CVE-2026-14456
+
+# CVE-2016-2781 - coreutils
+# Requires local shell access; longstanding accepted-risk / won't-fix across most distros.
+CVE-2016-2781
+
+# CVE-2025-60876 - busybox
+# No fixed Alpine package available yet. Revisit weekly.
+CVE-2025-60876

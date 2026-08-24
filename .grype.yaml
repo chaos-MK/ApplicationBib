@@ -1,0 +1,7 @@
+ignore:
+  - vulnerability: CVE-2026-14456
+    reason: "OpenSSL upstream rates this Low; fix ships in 3.5.8 which hasn't been released. Revisit weekly."
+  - vulnerability: CVE-2016-2781
+    reason: "Requires local shell access; accepted risk, longstanding won't-fix across distros."
+  - vulnerability: CVE-2025-60876
+    reason: "No fixed Alpine package available yet. Revisit weekly."
