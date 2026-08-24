@@ -237,6 +237,12 @@
             <artifactId>opentelemetry-api</artifactId>
             <version>1.62.0</version>
         </dependency>
+        
+        <dependency>
+		    <groupId>io.micrometer</groupId>
+		    <artifactId>micrometer-core</artifactId>
+		    <version>1.16.7</version>
+		</dependency>
 		
     </dependencies>
 </dependencyManagement>
