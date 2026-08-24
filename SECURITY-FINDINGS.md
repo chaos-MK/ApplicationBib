@@ -1260,50 +1260,50 @@ Vault's file audit device does not provide automatic log rotation. For a product
 **Status:** Fixed — Vault audit logging is enabled, writable, persistent, and verified.
 
 
-## Finding #019 — Critical/High: 2 CVEs via outdated Netty (transitive, firebase-admin)
-
+## Finding #019 — Critical/High: 3 CVEs via outdated Netty & Micrometer (transitive, firebase-admin & micrometer-registry-prometheus)
 **Date:** 2026-08-24
 **Tool that found it:** Snyk
-**Severity:** Critical (1) + High (1)
-**Packages affected:** io.netty:netty-handler@4.2.15.Final,
-io.netty:netty-codec-http@4.2.16.Final
-(both transitively via com.google.firebase:firebase-admin@9.7.1)
+**Severity:** Critical (1) + High (2)
+**Packages affected:**
+- io.netty:netty-handler@4.2.15.Final (transitively via com.google.firebase:firebase-admin@9.7.1)
+- io.netty:netty-codec-http@4.2.16.Final (transitively via com.google.firebase:firebase-admin@9.7.1)
+- io.micrometer:micrometer-core@1.16.6 (transitively via io.micrometer:micrometer-registry-prometheus@1.16.7 AND org.springframework.boot:spring-boot-starter-actuator@4.0.7)
 
 ### Risk
-2 of N total Snyk findings traced back to a single root cause: outdated
-Netty versions pulled in transitively by `firebase-admin@9.7.1`. Details:
+3 Snyk findings traced back to two root causes: outdated transitive dependencies pulled in despite direct dependency versions being bumped, because Spring Boot's parent BOM and/or transitive resolution order kept re-pinning the older versions.
+
 - **[Critical] Improper Check for Unusual or Exceptional Conditions**
   (SNYK-JAVA-IONETTY-19005879) in `netty-handler@4.2.15.Final` — malformed
   or unexpected input handling could lead to abnormal behavior or denial
   of service.
-- **[High] Use of Cache Containing Sensitive Information**
-  (SNYK-JAVA-IONETTY-18956131) in `netty-codec-http@4.2.16.Final` —
-  sensitive data may be retained in a cache and exposed to unauthorized
-  access.
-
-Both issues are fixed upstream in Netty 4.2.17.Final (and backported to
-4.1.137.Final), but `firebase-admin@9.7.1` still pins the vulnerable
-versions transitively, so a direct dependency override is required.
+- **[High] Cert validation mismatch**
+  (SNYK-JAVA-IONETTY-19233599) in `netty-handler@4.2.15.Final`.
+- **[High] CRLF Injection**
+  (SNYK-JAVA-IOMICROMETER-19233327) in `micrometer-core@1.16.6` —
+  fixed upstream in 1.16.7 / 1.17.1.
 
 ### What I did
-1. Confirmed no direct upgrade/patch was offered by Snyk for either issue
-   (fix requires overriding the transitive version).
-2. Checked for a newer `firebase-admin` release that bumps Netty
-   internally — [confirm result before filling in].
-3. Added explicit `dependencyManagement` entries pinning
-   `netty-handler` and `netty-codec-http` to `4.2.17.Final`.
-4. Ran `mvn dependency:tree -Dincludes=io.netty` to confirm the pinned
-   versions were actually resolved (not shadowed by another transitive
-   pin).
-5. Re-ran `snyk test --severity-threshold=high` and confirmed both
-   findings resolved.
+1. Confirmed no direct upgrade/patch was offered by Snyk for the Netty issues (fix required overriding the transitive version); a fix version existed for Micrometer (1.16.7) but bumping the direct `micrometer-registry-prometheus` version alone didn't propagate to `micrometer-core`.
+2. Ran `mvn dependency:tree -Dincludes=io.netty:netty-handler` — confirmed initial `dependencyManagement` override for Netty wasn't taking effect (Maven still resolved 4.2.15.Final from `firebase-admin`).
+3. Fixed Netty by excluding `netty-handler` from `firebase-admin` and adding it back as a direct dependency pinned to `4.2.17.Final`. Re-ran the tree check to confirm `4.2.17.Final` resolved cleanly.
+4. Ran `mvn dependency:tree -Dincludes=io.micrometer` — confirmed `micrometer-core` still resolved to `1.16.6`, pulled in both by `spring-boot-starter-actuator` (via parent BOM) and by `micrometer-registry-prometheus`.
+5. Fixed Micrometer by adding an explicit `dependencyManagement` entry pinning `micrometer-core` to `1.16.7`. Re-ran the tree check to confirm `1.16.7` resolved cleanly.
+6. Also fixed an unrelated Maven build warning: removed a duplicate `spring-boot-starter-actuator` declaration in `<dependencies>`.
+7. Re-ran `snyk test --severity-threshold=high` — 0 issues found. Pipeline passed.
 
 ### What changed
-- `pom.xml`: added `dependencyManagement` entries overriding
-  `io.netty:netty-handler` → `4.2.17.Final` and
-  `io.netty:netty-codec-http` → `4.2.17.Final`
+- `pom.xml`:
+  - Excluded `io.netty:netty-handler` from `com.google.firebase:firebase-admin@9.7.1` and added it as a direct dependency at `4.2.17.Final`.
+  - Added `dependencyManagement` entries pinning `io.netty:netty-codec-http` and `io.netty:netty-codec-compression` to `4.2.17.Final`.
+  - Added `dependencyManagement` entry pinning `io.micrometer:micrometer-core` to `1.16.7`.
+  - Removed duplicate `spring-boot-starter-actuator` dependency declaration.
 
-**Status:** Fixed
+### Verification
+- `mvn dependency:tree -Dincludes=io.netty:netty-handler` → resolves `4.2.17.Final`
+- `mvn dependency:tree -Dincludes=io.micrometer` → `micrometer-core` resolves `1.16.7`
+- `snyk test --severity-threshold=high` → **Tested 238 dependencies, 0 issues found. Pipeline passed.**
+
+**Status:** ✅ Fixed & Verified
 
 
 
@@ -1330,4 +1330,4 @@ versions transitively, so a direct dependency override is required.
 | #016 | **OWASP ZAP policy/rule configuration + fine-grained alert-ID pipeline gating (Medium)** | OWASP ZAP / Manual security review | ✅ Fixed |
 | #017 | **Vault KV secret versioning/retention limits + CAS enforcement (Medium)** | Manual architectural review | ✅ Fixed |
 | #018 | **Vault audit logging enabled (Medium)** | Manual architectural review | ✅ Fixed |
-| #019 | **2 Critical/High CVEs** — Netty 4.2.15/4.2.16 vulnerabilities (via firebase-admin) | Snyk | ✅ Fixed |
+| #019 | **3 Critical/High CVEs** — Netty 4.2.15/4.2.16 (via firebase-admin) & Micrometer-core 1.16.6 (via micrometer-registry-prometheus & spring-boot-starter-actuator) | Snyk | ✅ Fixed |
