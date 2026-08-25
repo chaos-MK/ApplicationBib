@@ -1,5 +1,6 @@
 package com.bib.app.Confi;
 
+import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
@@ -31,6 +32,7 @@ public class FirebaseConfig {
 
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                    .setHttpTransport(new NetHttpTransport())
                     .build();
 
             FirebaseApp.initializeApp(options);
