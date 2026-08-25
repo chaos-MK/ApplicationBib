@@ -49,7 +49,7 @@ resource "kubernetes_ingress_v1" "applicationbib" {
     rule {
       http {
         path {
-          path      = "/app(/|$)(.*)"
+          path      = "/api(/|$)(.*)"
           path_type = "ImplementationSpecific"
 
           backend {
