@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
+  namespace: default
 spec:
   serviceName: postgres
   replicas: 1
@@ -78,7 +79,7 @@ spec:
               ephemeral-storage: "1Gi"
         - name: postgres-exporter
           image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command: ["/bin/sh", "-c"]
           args:
             - . /vault/secrets/exporter-dsn && exec postgres_exporter
@@ -94,9 +95,11 @@ spec:
             requests:
               cpu: "50m"
               memory: "64Mi"
+              ephemeral-storage: "128Mi"
             limits:
               cpu: "200m"
               memory: "128Mi"
+              ephemeral-storage: "256Mi"
       volumes:
         - name: postgres-storage
           persistentVolumeClaim:

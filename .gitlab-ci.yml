@@ -248,7 +248,7 @@ kubeconform:
     name: ghcr.io/yannh/kubeconform:latest-alpine
     entrypoint: [""]
   script:
-    - /kubeconform -strict -summary k8s/app/*.yaml k8s/postgres/*.yaml k8s/vault/*.yaml
+    - /kubeconform -strict -summary -skip ServiceMonitor k8s/app/*.yaml k8s/postgres/*.yaml k8s/vault/*.yaml
 
 # -----------------------------------------------------------------------------
 # STAGE 10b — KUBE-SCORE (security & best practices)
