@@ -34,7 +34,7 @@ resource "kubernetes_deployment_v1" "ritual_growth_ui" {
 
         container {
           name              = "ritual-growth-ui"
-          image             = "registry.gitlab.com/khalilmohamed798/ritual-growth-ui:37691a2e"
+          image             = "registry.gitlab.com/khalilmohamed798/ritual-growth-ui:7acddb80"
           image_pull_policy = "Always"
 
           port {
