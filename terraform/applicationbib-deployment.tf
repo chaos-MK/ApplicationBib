@@ -46,7 +46,7 @@ resource "kubernetes_deployment_v1" "applicationbib" {
 
         container {
           name              = "applicationbib"
-          image             = "registry.gitlab.com/khalilmohamed798/applicationbib:a00e32a0"
+          image             = "registry.gitlab.com/khalilmohamed798/applicationbib:1fb905c8"
           image_pull_policy = "Always"
 
           env {
