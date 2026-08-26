@@ -30,8 +30,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
       prometheus = {
         prometheusSpec = {
-          retention   = "7d"
-          hostNetwork = true
+          retention = "7d"
 
           additionalScrapeConfigs = []
         }
