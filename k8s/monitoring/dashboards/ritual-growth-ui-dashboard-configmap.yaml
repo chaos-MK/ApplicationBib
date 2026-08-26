@@ -1,0 +1,396 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ritual-growth-ui-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  ritual-growth-ui.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "graphTooltip": 0,
+      "links": [],
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            }
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 0,
+            "y": 0
+          },
+          "id": 1,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "expr": "up{job=\"ritual-growth-ui\"}",
+              "legendFormat": "Frontend",
+              "refId": "A"
+            }
+          ],
+          "title": "Frontend Health",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit"
+            }
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 6,
+            "y": 0
+          },
+          "id": 2,
+          "targets": [
+            {
+              "expr": "rate(process_cpu_seconds_total{job=\"ritual-growth-ui\"}[5m])",
+              "legendFormat": "CPU",
+              "refId": "A"
+            }
+          ],
+          "title": "CPU Usage",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes"
+            }
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 12,
+            "y": 0
+          },
+          "id": 3,
+          "targets": [
+            {
+              "expr": "process_resident_memory_bytes{job=\"ritual-growth-ui\"}",
+              "legendFormat": "RSS",
+              "refId": "A"
+            }
+          ],
+          "title": "Memory Usage",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes"
+            }
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 18,
+            "y": 0
+          },
+          "id": 4,
+          "targets": [
+            {
+              "expr": "nodejs_heap_size_used_bytes{job=\"ritual-growth-ui\"}",
+              "legendFormat": "Heap Used",
+              "refId": "A"
+            },
+            {
+              "expr": "nodejs_heap_size_total_bytes{job=\"ritual-growth-ui\"}",
+              "legendFormat": "Heap Total",
+              "refId": "B"
+            }
+          ],
+          "title": "Node.js Heap",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 6
+          },
+          "id": 5,
+          "targets": [
+            {
+              "expr": "nodejs_eventloop_lag_p99_seconds{job=\"ritual-growth-ui\"}",
+              "legendFormat": "p99",
+              "refId": "A"
+            },
+            {
+              "expr": "nodejs_eventloop_lag_mean_seconds{job=\"ritual-growth-ui\"}",
+              "legendFormat": "Mean",
+              "refId": "B"
+            }
+          ],
+          "title": "Node.js Event Loop Lag",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 6
+          },
+          "id": 6,
+          "targets": [
+            {
+              "expr": "nodejs_active_handles_total{job=\"ritual-growth-ui\"}",
+              "legendFormat": "Active Handles",
+              "refId": "A"
+            },
+            {
+              "expr": "nodejs_active_requests_total{job=\"ritual-growth-ui\"}",
+              "legendFormat": "Active Requests",
+              "refId": "B"
+            }
+          ],
+          "title": "Node.js Activity",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 14
+          },
+          "id": 7,
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_count{job=\"ritual-growth-ui\"}[5m]))",
+              "legendFormat": "Requests/sec",
+              "refId": "A"
+            }
+          ],
+          "title": "HTTP Request Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 14
+          },
+          "id": 8,
+          "targets": [
+            {
+              "expr": "rate(http_server_requests_seconds_sum{job=\"ritual-growth-ui\"}[5m]) / rate(http_server_requests_seconds_count{job=\"ritual-growth-ui\"}[5m])",
+              "legendFormat": "Average latency",
+              "refId": "A"
+            }
+          ],
+          "title": "HTTP Request Latency",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            }
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 0,
+            "y": 22
+          },
+          "id": 9,
+          "targets": [
+            {
+              "expr": "process_open_fds{job=\"ritual-growth-ui\"}",
+              "legendFormat": "Open FDs",
+              "refId": "A"
+            },
+            {
+              "expr": "process_max_fds{job=\"ritual-growth-ui\"}",
+              "legendFormat": "Max FDs",
+              "refId": "B"
+            }
+          ],
+          "title": "File Descriptors",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            }
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 8,
+            "y": 22
+          },
+          "id": 10,
+          "targets": [
+            {
+              "expr": "process_uptime_seconds{job=\"ritual-growth-ui\"}",
+              "legendFormat": "Uptime",
+              "refId": "A"
+            }
+          ],
+          "title": "Frontend Uptime",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            }
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 16,
+            "y": 22
+          },
+          "id": 11,
+          "targets": [
+            {
+              "expr": "nodejs_version_info{job=\"ritual-growth-ui\"}",
+              "legendFormat": "Node.js {{version}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Node.js Version",
+          "type": "stat"
+        }
+      ],
+      "refresh": "15s",
+      "schemaVersion": 39,
+      "tags": [
+        "frontend",
+        "ritual-growth-ui",
+        "nextjs",
+        "nodejs"
+      ],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "title": "Ritual Growth UI - Frontend",
+      "uid": "ritual-growth-ui",
+      "version": 1
+    }
