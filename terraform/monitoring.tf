@@ -3,6 +3,7 @@ resource "helm_release" "kube_prometheus_stack" {
   namespace  = kubernetes_namespace.monitoring.metadata[0].name
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-prometheus-stack"
+
   values = [
     yamlencode({
       grafana = {
@@ -14,20 +15,39 @@ resource "helm_release" "kube_prometheus_stack" {
           }
         }
       }
+
+      kubeEtcd = {
+        enabled = false
+      }
+
+      kubeScheduler = {
+        enabled = false
+      }
+
+      kubeControllerManager = {
+        enabled = false
+      }
+
       prometheus = {
         prometheusSpec = {
-          retention = "7d"
+          retention   = "7d"
+          hostNetwork = true
+
+          additionalScrapeConfigs = []
         }
       }
+
       alertmanager = {
         enabled = true
       }
     })
   ]
+
   depends_on = [
     kubernetes_namespace.monitoring
   ]
 }
+
 resource "kubernetes_manifest" "podman_exporter_service" {
   manifest = yamldecode(file("${path.module}/podman-exporter-service.yaml"))
 

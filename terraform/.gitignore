@@ -1,2 +1,10 @@
 terraform.tfstate
 terraform.tfstate.backup
+
+# Local Terraform backup files
+monitoring.tf.bak
+monitoring.tf.bak2
+
+# Local Terraform backup files
+monitoring.tf.bak
+monitoring.tf.bak2
