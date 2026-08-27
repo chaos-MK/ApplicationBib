@@ -35,3 +35,6 @@ build/
 # Terraform state files
 terraform/*.tfstate
 terraform/*.tfstate.*
+
+# Local dashboard backups
+k8s/monitoring/dashboards/*.json.backup
