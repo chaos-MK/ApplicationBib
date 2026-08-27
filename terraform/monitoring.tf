@@ -8,6 +8,18 @@ resource "helm_release" "kube_prometheus_stack" {
     yamlencode({
       grafana = {
         enabled = true
+
+        additionalDataSources = [
+          {
+            name      = "Loki"
+            type      = "loki"
+            uid       = "loki"
+            access    = "proxy"
+            url       = "http://loki.monitoring.svc.cluster.local:3100"
+            isDefault = false
+          }
+        ]
+
         "grafana.ini" = {
           server = {
             root_url            = var.grafana_root_url
