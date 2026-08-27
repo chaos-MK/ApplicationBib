@@ -61,7 +61,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffv9meqk2yhogc"
+                        "name": "loki"
                       },
                       "group": "loki",
                       "kind": "DataQuery",
