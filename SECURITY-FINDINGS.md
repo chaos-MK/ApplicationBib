@@ -1448,7 +1448,7 @@ Resolved dependency versions:
 - `spring-security-crypto`: `7.0.6` → `7.0.7`
 - `spring-cloud-context`: `5.0.2` → `5.0.3`
 
-**Status:** Remediation implemented — pending CI/Snyk verification
+**Status:** ✅ Fixed
 
 
 
@@ -1479,4 +1479,4 @@ Resolved dependency versions:
 | #019 | **3 Critical/High CVEs** — Netty 4.2.15/4.2.16 (via firebase-admin) & Micrometer-core 1.16.6 (via micrometer-registry-prometheus & spring-boot-starter-actuator) | Snyk | ✅ Fixed |
 | #020 | **High** — httpcore5 DoS (CVE-2026-54399) + outdated bundled JDK 21.0.11 (7 CVEs) via base image | Trivy + Grype | ✅ Fixed |
 | #021 | **High/Medium** — openssl QUIC memory growth (CVE-2026-14456, no upstream fix yet), coreutils/busybox (no fix available) | Grype | ⚠️ Accepted Risk (ignored, revisit weekly) |
-| #022 | **10 Critical/High vulnerable paths** — Spring Boot 4.0.7 / Spring Framework 7.0.8 / Spring Security 7.0.6 / Spring Cloud Context 5.0.2 | Snyk | ⏳ Pending CI/Snyk verification |
+| #022 | **10 Critical/High vulnerable paths** — Spring Boot 4.0.7 / Spring Framework 7.0.8 / Spring Security 7.0.6 / Spring Cloud Context 5.0.2 | Snyk | ✅ Fixed |
