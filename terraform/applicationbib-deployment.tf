@@ -46,7 +46,7 @@ resource "kubernetes_deployment_v1" "applicationbib" {
 
         container {
           name              = "applicationbib"
-          image             = "registry.gitlab.com/khalilmohamed798/applicationbib:1fb905c8"
+          image             = "registry.gitlab.com/khalilmohamed798/applicationbib:3437bf63"
           image_pull_policy = "Always"
 
           env {
@@ -61,7 +61,7 @@ resource "kubernetes_deployment_v1" "applicationbib" {
 
           env {
             name  = "FRONTEND_ORIGIN"
-            value = "https://casio-matter-specs-there.trycloudflare.com"
+            value = "http://localhost:3000"
           }
 
           port {
