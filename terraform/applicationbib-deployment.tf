@@ -59,6 +59,11 @@ resource "kubernetes_deployment_v1" "applicationbib" {
             value = "/vault/secrets/firebase.json"
           }
 
+          env {
+            name  = "FRONTEND_ORIGIN"
+            value = "https://casio-matter-specs-there.trycloudflare.com"
+          }
+
           port {
             container_port = 8080
             protocol       = "TCP"

@@ -14,12 +14,16 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.beans.factory.annotation.Value;
 
 import com.bib.app.security.FirebaseAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    @Value("${FRONTEND_ORIGIN:http://localhost:3000}")
+    private String frontendOrigin;
     
     @Autowired
     private FirebaseAuthenticationFilter firebaseAuthenticationFilter;
@@ -30,7 +34,9 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth                .requestMatchers("/error").permitAll()
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/error").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/actuator/prometheus").permitAll()
                 .requestMatchers("/cohort/**", "/project/**", "/company/**", "/users/**","/session/**").authenticated()
@@ -67,9 +73,10 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(
-        	    "http://localhost:3000",
-        	    "http://192.168.49.2:31573"
-        	));
+            "http://localhost:3000",
+            "http://192.168.49.2:31573",
+            frontendOrigin
+        ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         // Add the hippo-api-version header to the allowed headers
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "hippo-api-version"));
