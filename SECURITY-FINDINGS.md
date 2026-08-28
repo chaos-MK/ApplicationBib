@@ -1390,6 +1390,67 @@ Two unrelated root causes surfaced together in CI image scans:
 **Status:** ⚠️ Accepted Risk (time-boxed) — no upstream fix available; revisit weekly until Alpine/OpenSSL ship a patched build.
 
 
+## Finding #022 — Critical/High: 10 vulnerable paths from Spring Boot 4.0.7 and Spring Cloud 5.0.2
+
+**Date:** 2026-08-28
+**Tool that found it:** Snyk
+**Severity:** Critical + High (10 findings)
+**Packages affected:** spring-beans, spring-expression, spring-web,
+spring-webmvc, spring-security-core, spring-security-crypto,
+spring-cloud-context
+(transitively via Spring Boot 4.0.7 and Spring Cloud 5.0.2)
+
+### Risk
+Snyk identified 10 vulnerable paths in the Maven dependency tree.
+
+Notable issues in this group:
+- **Arbitrary Code Injection — Critical** in `spring-webmvc@7.0.8`.
+- **Cross-site Scripting (XSS) — High** in `spring-web@7.0.8`.
+- **Sensitive Cookie in HTTPS Session Without "Secure" Attribute — High**
+  in `spring-web@7.0.8`.
+- **Allocation of Resources Without Limits or Throttling — High** in
+  `spring-beans`, `spring-expression`, and `spring-web`.
+- **Timing Attack — High** in `spring-security-core@7.0.6`.
+- **Predictable IV with CBC Mode — High** in
+  `spring-security-crypto@7.0.6`.
+- **Missing Authorization — High** in
+  `spring-cloud-context@5.0.2`.
+
+The findings were concentrated around outdated framework versions rather
+than application code.
+
+### What I did
+1. Reviewed the Snyk dependency paths and grouped the findings by their
+   upgrade root causes.
+2. Upgraded `spring-boot-starter-parent` from `4.0.7` to `4.0.8`.
+3. Verified that Spring Framework dependencies were upgraded from `7.0.8`
+   to `7.0.9`.
+4. Verified that Spring Security dependencies were upgraded from `7.0.6`
+   to `7.0.7`.
+5. Added an explicit `spring-cloud-context` dependency override from
+   `5.0.2` to `5.0.3`, which is the version identified by Snyk as fixing
+   the Missing Authorization issue.
+6. Ran Maven compilation successfully with:
+   `mvn -q -DskipTests compile`.
+7. Ran `git diff --check` successfully.
+8. Verified the resolved dependency tree.
+
+### What changed
+- `pom.xml`: Spring Boot parent `4.0.7` → `4.0.8`
+- `pom.xml`: added `spring-cloud-context` `5.0.3` override
+
+Resolved dependency versions:
+
+- `spring-web`: `7.0.8` → `7.0.9`
+- `spring-webmvc`: `7.0.8` → `7.0.9`
+- `spring-beans`: `7.0.8` → `7.0.9`
+- `spring-security-core`: `7.0.6` → `7.0.7`
+- `spring-security-crypto`: `7.0.6` → `7.0.7`
+- `spring-cloud-context`: `5.0.2` → `5.0.3`
+
+**Status:** Remediation implemented — pending CI/Snyk verification
+
+
 
 
 
@@ -1418,3 +1479,4 @@ Two unrelated root causes surfaced together in CI image scans:
 | #019 | **3 Critical/High CVEs** — Netty 4.2.15/4.2.16 (via firebase-admin) & Micrometer-core 1.16.6 (via micrometer-registry-prometheus & spring-boot-starter-actuator) | Snyk | ✅ Fixed |
 | #020 | **High** — httpcore5 DoS (CVE-2026-54399) + outdated bundled JDK 21.0.11 (7 CVEs) via base image | Trivy + Grype | ✅ Fixed |
 | #021 | **High/Medium** — openssl QUIC memory growth (CVE-2026-14456, no upstream fix yet), coreutils/busybox (no fix available) | Grype | ⚠️ Accepted Risk (ignored, revisit weekly) |
+| #022 | **10 Critical/High vulnerable paths** — Spring Boot 4.0.7 / Spring Framework 7.0.8 / Spring Security 7.0.6 / Spring Cloud Context 5.0.2 | Snyk | ⏳ Pending CI/Snyk verification |
