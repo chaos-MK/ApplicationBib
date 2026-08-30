@@ -541,47 +541,70 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    subgraph FrontendMetrics [Frontend Metrics]
+    subgraph ApplicationNamespace ["Namespace: Ritual-Growth platform"]
         FE[Frontend - ritual-growth-ui]
-        FMC[Prometheus Client / Node.js Metrics]
-        FE --> FMC
+        BE[Backend - ApplicationBib]
+        PG[(PostgreSQL)]
     end
 
-    subgraph BackendMetrics [Backend Metrics]
-        BE[Backend - ApplicationBib]
+    subgraph VaultNamespace ["Namespace: vault"]
+        VAULT[Vault]
+    end
+
+    subgraph MonitoringNamespace ["Namespace: monitoring"]
+        FMC[Prometheus Client / Node.js Metrics]
         MC[Micrometer / Prometheus Client]
         EP["/actuator/prometheus"]
-        BE --> MC
-        MC --> EP
+
+        PS[Prometheus Server]
+        KSM[kube-state-metrics]
+        PGE[PostgreSQL Exporter]
+
+        ALLOY[Grafana Alloy]
+        LOKI[Loki]
+        GF[Grafana]
+        AM[Alertmanager]
     end
 
-    FMC --> PS[Prometheus Server]
+    subgraph KubernetesControlPlane ["Kubernetes Control Plane"]
+        KA[Kubernetes API]
+    end
+
+    %% Frontend metrics
+    FE --> FMC
+    FMC --> PS
+
+    %% Backend metrics
+    BE --> MC
+    MC --> EP
     EP --> PS
 
-    subgraph K8sMetrics [Kubernetes State Metrics]
-        KA[Kubernetes API] --> KSM[kube-state-metrics]
-        KSM --> PS
-    end
+    %% Kubernetes metrics
+    KA --> KSM
+    KSM --> PS
 
-    subgraph DBMetrics [PostgreSQL Metrics]
-        PG[(PostgreSQL)] --> PGE[PostgreSQL Exporter]
-        PGE --> PS
-    end
+    %% PostgreSQL metrics
+    PG --> PGE
+    PGE --> PS
 
-    PS --> GF[Grafana]
+    %% Metrics visualization
+    PS --> GF
 
-    subgraph Logs [Log Pipeline]
-        FEC[Frontend Logs] --> ALL[Grafana Alloy]
-        BEC[Backend Logs] --> ALL
-        ALL --> LK[Loki]
-        LK --> GF
-    end
+    %% Log collection
+    FE --> ALLOY
+    BE --> ALLOY
+    PG --> ALLOY
+    VAULT --> ALLOY
+    KA --> ALLOY
 
-    subgraph Alerts [Alerting]
-        PS --> AMG[Alertmanager]
-        AMG --> WH[Webhook]
-        AMG --> EM[Email]
-    end
+    %% Log storage / visualization
+    ALLOY --> LOKI
+    LOKI --> GF
+
+    %% Alerting
+    PS --> AM
+    AM --> WH[Webhook]
+    AM --> EM[Email]
 ```
 
 ### G. Backend CI/CD
