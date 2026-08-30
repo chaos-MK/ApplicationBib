@@ -694,17 +694,18 @@ flowchart TD
 | 7 | Backend | Firebase Authentication | ID token verification request | Validate identity | Backend → Firebase (external) |
 | 8 | Backend | PostgreSQL | SQL queries | Persist/retrieve app data | Backend → Data layer |
 | 9 | Vault | Backend | `firebase.json` service-account credential | Enable Firebase Admin SDK | Secrets boundary → Backend |
-| 10 | Backend (`/actuator/prometheus`) | Prometheus Server | Metrics scrape | Observability | Backend → Monitoring |
-| 11 | PostgreSQL | PostgreSQL Exporter | DB stats | Observability | Data layer → Monitoring |
-| 12 | Kubernetes API | kube-state-metrics | Cluster object state | Observability | K8s control plane → Monitoring |
-| 13 | Grafana Alloy | Loki | Log lines | Log aggregation | App/K8s → Monitoring |
-| 14 | Prometheus Server | Grafana | Metric queries | Visualization | Monitoring internal |
-| 15 | Prometheus Server | Alertmanager | Fired alerts | Alert routing | Monitoring internal |
-| 16 | Alertmanager | Webhook endpoint | Alert notification | External notification | Monitoring → External system |
-| 17 | Alertmanager | Email | Alert notification | External notification | Monitoring → External system |
-| 18 | GitLab | CI Runners (Docker/Shell) | Pipeline jobs, CI variables | Build/test/deploy | CI/CD boundary |
-| 19 | CI (Docker Runner) | GitLab Container Registry | Built container image | Store artifact | CI/CD → Registry |
-| 20 | GitLab Container Registry | Kubernetes (Backend/Frontend pods) | Container image pull | Deploy workload | Registry → Runtime |
+| 10 | Spring Boot / Micrometer Prometheus Client | `/actuator/prometheus` | Prometheus-formatted application metrics | Expose application metrics for scraping | Backend application |
+| 11 | Prometheus Server | `/actuator/prometheus` | Metrics scrape request/response | Collect and store application metrics | Monitoring → Backend application |
+| 12 | PostgreSQL | PostgreSQL Exporter | DB stats | Observability | Data layer → Monitoring |
+| 13 | Kubernetes API | kube-state-metrics | Cluster object state | Observability | K8s control plane → Monitoring |
+| 14 | Grafana Alloy | Loki | Log lines | Log aggregation | App/K8s → Monitoring |
+| 15 | Prometheus Server | Grafana | Metric queries | Visualization | Monitoring internal |
+| 16 | Prometheus Server | Alertmanager | Fired alerts | Alert routing | Monitoring internal |
+| 17 | Alertmanager | Webhook endpoint | Alert notification | External notification | Monitoring → External system |
+| 18 | Alertmanager | Email | Alert notification | External notification | Monitoring → External system |
+| 19 | GitLab | CI Runners (Docker/Shell) | Pipeline jobs, CI variables | Build/test/deploy | CI/CD boundary |
+| 20 | CI (Docker Runner) | GitLab Container Registry | Built container image | Store artifact | CI/CD → Registry |
+| 21 | GitLab Container Registry | Kubernetes (Backend/Frontend pods) | Container image pull | Deploy workload | Registry → Runtime |
 
 ---
 
@@ -712,30 +713,30 @@ flowchart TD
 
 | Component | Spoofing | Tampering | Repudiation | Information Disclosure | Denial of Service | Elevation of Privilege |
 |---|---|---|---|---|---|---|
-| Frontend | Malicious client impersonating legitimate UI (phishing clone) | Client-side JS tampering, compromised build-arg values | Limited client-side logging | Firebase config values (public by design) exposed in bundle; risk if API key restrictions are weak | Client-side resource exhaustion (browser only) | N/A (no privileged frontend context) |
-| Firebase Authentication | Credential stuffing, token replay | N/A (managed by Firebase) | Firebase-side audit logs (external, limited visibility) | ID token leakage via logs/URLs/referrers | Firebase-side rate limiting (external control) | Improper custom claims usage could over-privilege a user |
-| Firebase Web SDK | N/A (library) | Supply-chain tampering of SDK package | N/A | Overly permissive Firebase security rules if misconfigured | N/A | N/A |
-| Backend | Forged/replayed ID tokens if verification skipped | Manipulated request payloads if input validation weak | Lack of structured request/audit logging | Verbose error responses leaking internals | Unbounded/expensive endpoints without rate limiting | Broken authorization allowing horizontal/vertical privilege escalation |
-| Firebase Admin SDK | N/A (library) | Tampered service-account credential file | N/A | Service-account credential disclosure = full admin capability | N/A | Compromised credential grants full Firebase project admin rights |
-| PostgreSQL | Unauthorized DB connection if credentials leak | SQL injection, unauthorized writes | Lack of DB-level audit logging | Data exfiltration via injection or over-broad grants | Expensive/unbounded queries, connection exhaustion | Overly broad DB role/grant escalation |
-| Vault | Unauthorized pod impersonating backend service account | Policy misconfiguration allowing secret overwrite | Vault audit logging not yet centralized (see §21) | Overly broad Vault policy exposing unrelated secrets | Vault unavailability blocking secret retrieval on pod (re)start | Excessive Vault policy scope granting unintended secret access |
-| Vault Agent Injector | Malicious pod requesting injection via spoofed K8s SA | Sidecar/init-container tampering | Injector logs not centrally aggregated | Secret written to wrong/compromised pod filesystem | Injector failure blocking pod startup | Overly permissive injector RBAC |
-| Kubernetes (Minikube) | Compromised kubeconfig/service account token | Unauthorized manifest/resource modification | Limited K8s audit logging in Minikube by default | Secrets/ConfigMaps readable by over-privileged pods | Resource exhaustion without limits/quotas | Weak RBAC allowing namespace/cluster-level escalation |
-| NGINX Ingress | Host header spoofing, ingress rule confusion | Ingress annotation tampering | Access logs may be incomplete | Misrouted requests exposing internal services | Connection flood at ingress layer | Ingress controller RBAC over-scoped |
-| Cloudflare Quick Tunnel | No app-level auth at edge — anyone reaching the tunnel URL reaches ingress | Tunnel config tampering (out of cluster scope) | Cloudflare-side logs (external, limited visibility) | Quick Tunnel URLs are ephemeral but discoverable if leaked | Tunnel-level throttling (Cloudflare-managed) | N/A — tunnel does not perform app authorization |
-| Prometheus Client / Micrometer | N/A (library) | Metric value manipulation from compromised app process | N/A | Unauthenticated `/actuator/prometheus` exposing internal metrics/paths | Expensive metric cardinality causing scrape/storage strain | N/A |
-| Prometheus Server | Spoofed scrape targets if ServiceMonitor misconfigured | Metric injection from untrusted target | Limited query audit logging | Unauthenticated Prometheus UI/API exposing all metrics | High-cardinality metrics causing storage exhaustion | Broad RBAC on Prometheus service account |
-| kube-state-metrics | N/A | N/A (read-only) | N/A | Exposes cluster topology/metadata to any consumer with scrape access | Scrape-induced API server load | Read-only K8s API access if over-scoped |
-| PostgreSQL Exporter | Spoofed exporter target | N/A (read-only) | N/A | DB connection string/credentials exposure if misconfigured | Exporter query load on DB | Exporter DB role broader than required |
-| Grafana | Weak/default Grafana credentials | Dashboard/datasource tampering by unauthorized user | Grafana access logs (if enabled) | Dashboards exposing sensitive metrics/logs to unauthorized viewers | Expensive dashboard queries | Grafana admin role over-assignment |
-| Alertmanager | Spoofed alert source | Alert rule/config tampering | No confirmation of notification delivery | Alert content may contain sensitive labels/annotations | Alert flood / notification spam | Overly broad Alertmanager config access |
-| Grafana Alloy | Spoofed log source | Log stream tampering in transit | Gaps in log collection reduce forensic capability | Sensitive data (tokens, PII) leaking into logs | Log volume overwhelming Loki ingestion | Alloy service account over-permissioned |
-| Loki | N/A (ingestion only) | Log tampering pre-ingestion | Incomplete retention reducing investigative capability | Sensitive log content readable by broad Grafana access | Ingestion overload from log floods | Loki datasource permissions over-scoped in Grafana |
-| GitLab CI/CD | Compromised GitLab account/token | Pipeline definition tampering (`.gitlab-ci.yml`) | Pipeline logs generally available (positive control) | CI/CD variables (deploy credentials, registry tokens) exposure via misconfigured jobs — Firebase Web config values are excluded, as they are non-confidential by design (see §2.1) | Pipeline/runner resource exhaustion | Overly broad CI variable scope/protected-branch bypass |
-| Container Registry | Spoofed/typo-squatted image push | Image tampering post-scan, pre-deploy | Registry access logs (if enabled) | Registry credential leakage exposing all images | Registry unavailability blocking deploys | Overly broad registry push/pull permissions |
-| Docker CI Runner | Compromised runner registration token | Malicious job tampering build output | Job logs (positive control) | Build secrets exposed via job logs/artifacts | Runner resource exhaustion from malicious jobs | Runner service account broader than build needs |
-| Local Shell Runner | Compromised host running the shell runner | Direct host-level tampering (broadest blast radius) | Local execution may lack centralized logging | Runner has direct access to kubeconfig, Vault tokens, Terraform state | Local resource exhaustion affecting Minikube host | Runner has broad local privileges — highest escalation risk in the system |
-| Terraform | Spoofed state backend (if remote backend used) | State/config tampering | Apply history not centrally audited | Terraform state may contain sensitive infra values | N/A (control-plane tool, not runtime) | Terraform apply credentials often broadly scoped |
+| Frontend | Malicious client impersonating the legitimate application or phishing clone | Malicious modification of frontend code or CI/CD build inputs | Limited ability to prove client-side actions originated from a legitimate user/device | Firebase `NEXT_PUBLIC_*` configuration is intentionally public; risk arises if Firebase project/API-key restrictions are overly permissive | Client-side resource exhaustion; excessive requests against backend APIs | N/A — frontend has no trusted privileged execution context |
+| Firebase Authentication | Credential theft, credential stuffing, session/token replay | Abuse of authentication flows or unauthorized changes to authentication configuration | Limited application-side visibility into Firebase-side authentication events | Firebase ID-token leakage through logs, URLs, referrers, or compromised client storage | Authentication abuse, repeated login attempts, or provider-side rate limiting | Improper custom claims or authorization configuration could grant excessive privileges |
+| Firebase Web SDK | Malicious/typosquatted dependency or compromised SDK package | Supply-chain modification of the SDK dependency or malicious frontend integration | N/A — library itself does not provide application auditability | Client-side Firebase configuration is intentionally visible; sensitive tokens must not be exposed through application logging | Malicious or faulty SDK usage causing excessive authentication/API activity | N/A — SDK itself should not grant backend privileges |
+| Backend | Forged, expired, revoked, or replayed ID tokens if token verification/validation is bypassed or incorrectly implemented | Manipulated request payloads, parameters, or application state if validation/authorization is insufficient | Insufficient structured authentication/request audit logging may prevent attribution of sensitive actions | Verbose errors, sensitive application responses, or logs exposing internal information | Unbounded/expensive endpoints, request flooding, connection exhaustion, or resource exhaustion | Broken authorization allowing horizontal or vertical privilege escalation |
+| Firebase Admin SDK | N/A — server-side library | Tampering with the service-account credential or SDK dependency | N/A | Disclosure of the service-account credential could grant broad Firebase project capabilities depending on IAM permissions | N/A | Compromise of the service-account credential could provide the privileges assigned to that service account |
+| PostgreSQL | Unauthorized DB connection using stolen credentials | SQL injection, unauthorized writes, or malicious data modification | Insufficient DB-level audit logging may prevent attribution of database changes | Data exfiltration through injection, unauthorized queries, backups, or excessive DB grants | Expensive/unbounded queries, connection exhaustion, or storage exhaustion | Overly broad DB roles/grants allowing unauthorized administrative actions |
+| Vault | Unauthorized workload impersonating the backend identity or abusing Kubernetes authentication | Unauthorized modification of Vault configuration/policies/secrets | Incomplete centralized Vault audit trail could hinder attribution | Overly broad Vault policy could expose secrets belonging to other workloads | Vault unavailability can prevent secret retrieval during pod startup/restart | Excessive Vault policy or Kubernetes-auth privileges could grant unintended secret access |
+| Vault Agent Injector | Malicious pod attempting to obtain secret injection using an unauthorized or compromised Kubernetes identity | Unauthorized modification of injector configuration, annotations, templates, or injected-secret handling | Injector activity may be difficult to attribute without centralized audit logging | Secret injection into an unintended or compromised pod/filesystem | Injector failure can block application startup when injected secrets are required | Overly broad injector RBAC could allow unauthorized secret injection behavior |
+| Kubernetes (Minikube) | Compromised kubeconfig, service-account token, or workload identity | Unauthorized modification of Kubernetes resources, manifests, or configuration | Limited Kubernetes audit logging in Minikube can reduce attribution of administrative actions | Over-privileged workloads may read Secrets, ConfigMaps, pod metadata, or cluster information | Resource exhaustion without sufficient limits/quotas or workload isolation | Excessive RBAC permissions can allow namespace or cluster-level privilege escalation |
+| NGINX Ingress | Host-header manipulation, ingress-rule confusion, or routing abuse | Unauthorized modification of Ingress resources or annotations | Incomplete ingress access logs can make request attribution difficult | Misrouting or exposed routes could reveal internal services | Connection floods or excessive request volume at the ingress layer | Over-scoped ingress-controller RBAC could enable unauthorized cluster actions |
+| Cloudflare Quick Tunnel | The tunnel URL itself provides no application identity; anyone who discovers/reaches it can reach the exposed ingress routes | Tunnel configuration or startup-script tampering outside the Kubernetes control plane | Cloudflare-side visibility is external and limited compared with application audit logs | Leakage/discovery of the temporary Quick Tunnel URL exposes the reachable ingress surface | Tunnel/provider throttling or resource exhaustion can affect availability | N/A — Quick Tunnel does not provide application authorization |
+| Prometheus Client / Micrometer | N/A — instrumentation library | Metric values could be manipulated if the application process is compromised | N/A | Unauthenticated `/actuator/prometheus` could expose internal application/runtime metrics and metadata | Excessive metric cardinality or expensive instrumentation could increase scrape/storage load | N/A |
+| Prometheus Server | Spoofed or unintended scrape targets through incorrect ServiceMonitor/discovery configuration | Metric injection or unauthorized modification of scrape/rule configuration | Limited Prometheus query/audit history can make administrative actions difficult to attribute | Unauthenticated Prometheus UI/API can expose infrastructure and application metrics | High-cardinality metrics, excessive queries, or storage exhaustion | Overly broad Prometheus service-account/RBAC permissions |
+| kube-state-metrics | N/A — read-only metrics component | Unauthorized modification of its configuration or scrape exposure | Limited auditability of metric collection configuration | Exposes Kubernetes object state/topology information to consumers with scrape access | Excessive scraping can increase Kubernetes API-server load | Over-scoped Kubernetes API permissions could expose more cluster information than required |
+| PostgreSQL Exporter | Spoofed exporter target or unauthorized exporter deployment | Unauthorized modification of exporter configuration | Limited exporter/database auditability | Misconfiguration could expose DB connection information or detailed database performance metadata | Excessive exporter queries could increase database load | Exporter database role broader than required could expose or modify excessive DB information |
+| Grafana | Weak or compromised Grafana credentials/session | Unauthorized dashboard, datasource, alert, or configuration modification | Grafana audit/access logging may be incomplete | Dashboards and datasources may expose sensitive metrics or logs to unauthorized users | Expensive dashboard queries or excessive concurrent requests | Over-assigned Grafana administrator privileges |
+| Alertmanager | Spoofed or unauthorized alert submissions | Unauthorized modification of alert-routing/configuration | Lack of notification-delivery auditing can make alert handling difficult to prove | Alert labels/annotations may contain sensitive operational information | Alert flooding or notification spam | Overly broad configuration/API access could allow notification manipulation |
+| Grafana Alloy | Compromised or unauthorized log source/collector | Unauthorized modification of collector configuration or manipulation of collected log streams | Gaps in log collection reduce forensic attribution | Sensitive tokens, credentials, PII, or application data may leak into logs | Excessive log volume can overwhelm Alloy/Loki resources | Over-scoped Alloy permissions could allow unauthorized collection or cluster access |
+| Loki | Unauthorized log producer or ingestion client | Unauthorized log ingestion, deletion, or manipulation where permissions allow | Missing/incomplete retention can reduce forensic evidence | Sensitive application/container logs may be readable by unauthorized Grafana users | Log-ingestion floods or storage exhaustion | Over-scoped Loki/Grafana datasource permissions |
+| GitLab CI/CD | Compromised GitLab account, token, or pipeline identity | Pipeline definition tampering, malicious merge/push, or unauthorized CI configuration changes | Pipeline/job history provides attribution, but incomplete audit controls may limit forensic certainty | CI/CD variables such as deploy credentials and registry tokens may be exposed through misconfigured jobs; Firebase Web configuration values are non-confidential by design | Pipeline or runner resource exhaustion | Overly broad CI permissions, protected-branch bypass, or unauthorized variable access |
+| Container Registry | Unauthorized or spoofed image push | Image replacement/tampering after scanning and before deployment | Registry audit logs may be insufficient for complete attribution if not centrally retained | Registry credentials or private image contents could be exposed | Registry outage can block deployment | Excessive push/pull permissions can enable unauthorized image publication or access |
+| Docker CI Runner | Compromised runner registration/token or malicious CI job | Malicious job can modify build output, artifacts, or generated images | CI job logs provide some attribution but can be manipulated by a compromised job | Build-time secrets may be exposed through logs/artifacts if jobs are misconfigured | Malicious jobs can exhaust runner resources | Runner permissions broader than build requirements can increase escalation impact |
+| Local Shell Runner | Compromised runner host, credentials, or execution context | Direct host-level modification of Kubernetes, Vault, Terraform, or deployment state | Local execution may lack centralized auditability | Runner has access to kubeconfig, Vault credentials/tokens, Terraform state, and deployment data | Local resource exhaustion can affect Minikube and deployment availability | Broad host/Kubernetes/Vault/Terraform access gives this runner the highest privilege-escalation risk |
+| Terraform | Unauthorized identity using Terraform credentials | Unauthorized modification of Terraform configuration/state or infrastructure resources | Apply history/state may not provide complete centralized attribution | Terraform state may contain sensitive infrastructure values | Failed or malicious applies can disrupt infrastructure | Terraform credentials with excessive scope can enable broad infrastructure privilege escalation |
 
 ---
 
@@ -768,40 +769,83 @@ flowchart TD
 
 ---
 
-## 22. Residual Risks & Future Recommendations *(Not currently implemented)*
+## 22. Residual Risks & Future Recommendations
+
+The following items represent **remaining risks or future improvements**. Controls that have already been implemented or explicitly evaluated are not listed here as missing controls.
+
+### Remaining / Future Improvements *(Not currently implemented)*
 
 - Cloudflare Access or stronger edge authentication for non-development environments
-- Stricter Kubernetes NetworkPolicies between namespaces/workloads
-- Tighter, least-privilege Vault policies
-- Tighter Kubernetes RBAC
-- Dedicated least-privilege CI service accounts (especially for the local Shell runner)
+- Further refinement of Vault policies where additional least-privilege reduction is practical
+- Further Kubernetes RBAC tightening where compatible with the permissions required by Vault Kubernetes authentication and the deployed components
+- Dedicated least-privilege CI service accounts, especially for the local Shell runner
 - Reducing the blast radius of the local Shell runner
-- Vault audit logging and centralized audit analysis
-- Access controls on Prometheus/Grafana
-- Rate limiting at ingress/application layer
-- Image signing and verification (Cosign/Sigstore)
+- Vault audit logging and centralized analysis of Vault audit events
+- Access controls on Prometheus and Grafana
+- Rate limiting at the ingress/application layer
+- Image signing and verification using Cosign/Sigstore
 - Improved CI/CD provenance and build attestation
-- Stronger, centralized audit logging
-- Centralized security event monitoring
+- Centralized security audit-event aggregation across infrastructure and security-relevant components
+- Centralized security-event detection, correlation, and monitoring
 
-These are explicitly **future work**, not implemented controls.
+### Implemented / Verified Controls Relevant to These Risks
+
+The following controls have already been implemented or explicitly reviewed and therefore are **not treated as missing controls**:
+
+- Kubernetes NetworkPolicies are implemented to restrict network communication between workloads according to the required application/monitoring flows.
+- Vault access is scoped using Kubernetes authentication and workload-specific Vault policy controls.
+- Vault secret TTL controls have been configured.
+- Kubernetes RBAC has been reviewed and tightened where practical. Further restriction was evaluated against the requirements of Vault Kubernetes authentication; the Kubernetes ServiceAccount/token relationship required by Vault must remain available to workloads that authenticate to Vault.
+- Application/container logs are centrally collected through Grafana Alloy → Loki → Grafana.
+- Prometheus Server → Alertmanager provides centralized operational/metric alert routing to the configured webhook and email destinations.
+
+These implemented controls still carry residual risk if their policies, permissions, credentials, or underlying workloads are compromised.
 
 ---
 
 ## 23. Final Summary
 
 1. **Reaching the system:** Users reach Ritual Growth over the Internet via a Cloudflare Quick Tunnel, which forwards traffic to the NGINX Ingress Controller inside the Minikube cluster; NGINX routes requests to the frontend, backend, or Grafana Services based on ingress rules.
+
 2. **Firebase authentication:** The frontend uses the Firebase Web SDK for registration, login, and session/token management; the backend independently verifies each request's Firebase ID token server-side via the Firebase Admin SDK (`verifyIdToken`).
-3. **Frontend configuration:** Production Firebase Web configuration values are injected at **build time** through GitLab CI/CD variables, passed to Buildah as `--build-arg`s, converted to Dockerfile `ARG`/`ENV`, and baked into the Next.js production image — Vault plays no role in this path.
-4. **Backend credential protection:** The backend's Firebase service-account credential is managed by HashiCorp Vault and injected at runtime into the backend pod (`/vault/secrets/firebase.json`) via the Vault Agent Injector, using Kubernetes auth — never checked into source, never present in the frontend or PostgreSQL.
-5. **Application data:** After authentication, the backend reads/writes application data directly to PostgreSQL — a system entirely separate from Firebase identity data.
-6. **Metrics:** Application metrics flow from Micrometer/Actuator (`/actuator/prometheus`) to the Prometheus Server; Kubernetes state metrics flow via kube-state-metrics; PostgreSQL metrics flow via the PostgreSQL Exporter — all converging on Prometheus Server, then Grafana.
-7. **Logs:** Frontend and backend container logs are shipped by Grafana Alloy into Loki, which Grafana queries separately from metrics.
-8. **Alerts:** Prometheus Server evaluates alerting rules and hands fired alerts to Alertmanager, which routes notifications to a webhook and/or email — Prometheus never notifies directly.
-9. **Terraform:** Terraform manages Kubernetes/Helm-deployed infrastructure and monitoring configuration (ingress, kube-prometheus-stack, Loki, Grafana dashboards, ServiceMonitors) as infrastructure-as-code, independent of runtime application traffic.
-10. **CI/CD supply chain security:** The backend pipeline runs on a Docker CI runner (secrets/SAST/dependency/test/build/SBOM/image scanning) and a local Shell runner (deploy, manifest/security validation, smoke tests, DAST); the frontend pipeline runs a Docker-based Buildah/Podman/Skopeo chain with equivalent secrets/SAST/dependency/typecheck/lint/build/image-scan/push stages.
-11. **Implemented controls:** Firebase ID-token auth and server-side verification, Vault-managed backend credentials via Kubernetes auth and the Agent Injector, secrets/SAST/dependency/container scanning (Gitleaks, Semgrep, SonarQube, Snyk, Trivy, Grype, Syft), Dockerfile linting (Hadolint), Kubernetes manifest/security validation (kubeconform, kube-score), OWASP ZAP DAST, the full Prometheus/kube-state-metrics/PostgreSQL-Exporter/Grafana/Alertmanager/Alloy/Loki observability stack, Terraform-managed monitoring, and Cloudflare Quick Tunnel in place of direct NodePort exposure.
-12. **Future work:** Edge authentication hardening, NetworkPolicies, tighter Vault/K8s RBAC, reduced CI runner blast radius, Vault audit logging, monitoring access controls, rate limiting, image signing/attestation, and centralized security event monitoring remain **recommended, not implemented**.
+
+3. **Frontend configuration:** Production Firebase Web configuration values are injected at **build time** through GitLab CI/CD variables, passed to Buildah as `--build-arg` values, converted to Dockerfile `ARG`/`ENV`, and baked into the Next.js production image. Vault plays no role in this frontend configuration path. Because these are `NEXT_PUBLIC_*` values, they are not treated as confidential secrets.
+
+4. **Backend credential protection:** The backend's Firebase service-account credential is managed by HashiCorp Vault and injected at runtime into the backend pod (`/vault/secrets/firebase.json`) via the Vault Agent Injector using Kubernetes authentication. The credential is not stored in the frontend, PostgreSQL, source repository, or container image.
+
+5. **Application data:** After authentication, the backend reads and writes application data directly to PostgreSQL. Firebase Authentication and PostgreSQL are separate systems and are not represented as a linear authentication-to-database chain.
+
+6. **Metrics:** Application metrics flow from Micrometer/Actuator (`/actuator/prometheus`) to the Prometheus Server. Kubernetes state metrics flow through kube-state-metrics, and PostgreSQL metrics flow through the PostgreSQL Exporter. These metrics converge on Prometheus Server and are queried by Grafana.
+
+7. **Frontend monitoring:** The confirmed frontend monitoring consists of CPU usage, memory usage, Node.js heap used, Node.js heap total, event-loop lag, active Node.js handles, and active Node.js requests. These metrics are represented in the Terraform-provisioned seven-panel `ritual-growth-ui` Grafana dashboard. No unverified frontend request-rate or error-rate metrics are claimed.
+
+8. **Logs:** Frontend and backend container logs are collected by Grafana Alloy and sent to Loki. Grafana queries Loki separately from Prometheus metrics. Prometheus is therefore treated as the metrics system, while Loki is the log storage/query system.
+
+9. **Alerts:** Prometheus Server evaluates alerting rules and sends fired alerts to Alertmanager. Alertmanager performs notification routing to the configured webhook and/or email destinations. Prometheus does not directly perform email/webhook notification delivery.
+
+10. **Terraform:** Terraform manages the Kubernetes/Helm infrastructure and monitoring configuration, including ingress, kube-prometheus-stack, Loki, Grafana dashboards, ServiceMonitors, and related monitoring resources. Terraform is an infrastructure-as-code control-plane tool and is not a runtime dependency of the frontend or backend.
+
+11. **Cloudflare:** The Cloudflare Quick Tunnel and its `cloudflared` daemon are managed separately through the documented tunnel script and are **not managed by Terraform**. The Quick Tunnel provides external access to the Minikube ingress without directly exposing the backend NodePort to the public Internet. Firebase remains responsible for application-level authentication.
+
+12. **Network security:** Kubernetes NetworkPolicies have been implemented to restrict workload communication according to the required application and observability flows. Residual risk remains from any explicitly permitted communication paths and from compromise of an allowed workload.
+
+13. **Vault security:** Vault Kubernetes authentication, workload-scoped policy controls, and secret TTL controls are implemented. Further policy refinement and centralized Vault audit logging remain possible improvements.
+
+14. **Kubernetes RBAC:** Kubernetes RBAC has been reviewed and tightened where practical. Stricter restrictions were evaluated against the requirements of Vault Kubernetes authentication. Workloads that authenticate to Vault require the relevant Kubernetes ServiceAccount/token relationship, so disabling or removing those required permissions indiscriminately would break the Vault authentication flow.
+
+15. **CI/CD supply-chain security:** The backend pipeline uses Docker-based build/security validation and a local Shell runner for deployment and runtime verification. The frontend pipeline uses Docker-based Buildah/Podman/Skopeo tooling. Security controls include Gitleaks, Semgrep, SonarQube, Snyk, npm audit, tests, Hadolint, Syft, Trivy, Grype, kubeconform, kube-score, and OWASP ZAP as applicable to each pipeline.
+
+16. **Implemented observability:** The implemented observability stack consists of Micrometer/Actuator instrumentation, Prometheus Server, kube-state-metrics, PostgreSQL Exporter, Grafana, Alertmanager, Grafana Alloy, and Loki. Terraform manages the relevant monitoring infrastructure and Grafana dashboards.
+
+17. **Implemented security controls:** Firebase ID-token authentication and server-side verification, Vault-managed backend credentials, Kubernetes-authenticated Vault access, Vault TTL controls, Kubernetes NetworkPolicies, reviewed/tightened RBAC, secrets/SAST/dependency/container scanning, SBOM generation, Dockerfile linting, Kubernetes manifest/security validation, OWASP ZAP DAST, monitoring/alerting, and Cloudflare Quick Tunnel-based external access are implemented controls.
+
+18. **Remaining future work:** The principal remaining improvements are stronger edge authentication for non-development environments, additional Vault/Kubernetes policy refinement where practical, dedicated least-privilege CI service accounts, reducing the local Shell runner's blast radius, Vault audit logging, monitoring UI access controls, rate limiting, image signing/verification, stronger CI/CD provenance, centralized security audit-event aggregation, and centralized security-event detection/correlation.
+
+19. **Audit logging distinction:** Existing Alloy → Loki provides centralized application/container log collection. This should not be confused with **centralized security audit logging**, which would additionally collect security-specific audit events such as Vault access/policy changes, Kubernetes audit events, CI/CD security events, and administrative actions into a common analysis layer.
+
+20. **Security-event monitoring distinction:** Centralized security-event monitoring is a future capability for detecting, correlating, and alerting on suspicious security activity across those audit sources. The existing Prometheus/Alertmanager stack provides operational and metric-based alerting but is not represented as a complete SIEM/SOC-style security-event monitoring system.
+
+These remaining items are explicitly **future improvements**, while the controls listed as implemented/verified above reflect the current deployed system.
 
 ---
 
