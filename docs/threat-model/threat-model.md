@@ -773,34 +773,32 @@ flowchart TD
 | Terraform | Unauthorized identity using Terraform credentials | Unauthorized modification of Terraform configuration/state or infrastructure resources | Apply history/state may not provide complete centralized attribution | Terraform state may contain sensitive infrastructure values | Failed or malicious applies can disrupt infrastructure | Terraform credentials with excessive scope can enable broad infrastructure privilege escalation |
 
 ---
-
 ## 21. Security Control Mapping
 
 | Threat | Existing Control | Status | Residual Risk | Recommended Improvement |
 |---|---|---|---|---|
-| Forged/invalid ID tokens reaching backend | Firebase ID-token verification via Admin SDK (`verifyIdToken`) | Implemented | Low, assuming clock skew/revocation handled by SDK defaults | — |
-| Firebase service-account credential exposure | Vault-managed credential injected only into backend pod via Vault Agent Injector | Implemented | Compromise of backend pod still exposes credential in-memory/on-disk | Tighter pod security context, shorter secret TTL/rotation |
-| Vault access from arbitrary workloads | Kubernetes auth method scoping Vault access | Implemented | Overly broad Vault policy could still grant unintended access | Tighter, least-privilege Vault policies (see recommendations) |
-| Secrets committed to source | Gitleaks in both pipelines | Implemented | Detects only what patterns are configured for | Expand/rotate detection rules periodically |
+| Forged/invalid ID tokens reaching backend | Firebase ID-token verification via Admin SDK (`verifyIdToken`) | Implemented | Low, assuming clock skew/revocation handling remains within SDK/application configuration | — |
+| Firebase service-account credential exposure | Vault-managed credential injected only into backend pod via Vault Agent Injector | Implemented | Compromise of backend pod could expose the credential in-memory/on-disk | Maintain least-privilege access and credential rotation/TTL controls |
+| Vault access from arbitrary workloads | Kubernetes auth method with workload-specific Vault access scoping and least-privilege policy | Implemented | A compromised authorized workload could still access the secrets permitted to its Vault role | Periodically review and tighten Vault policies as requirements evolve |
+| Secrets committed to source | Gitleaks in both pipelines | Implemented | Detects only secrets covered by configured patterns | Expand/rotate detection rules periodically |
 | Vulnerable/insecure code patterns | Semgrep, SonarQube | Implemented | False negatives on novel patterns | Periodic rule tuning |
-| Vulnerable dependencies | Snyk (backend & frontend), npm audit (frontend) | Implemented | New CVEs post-scan until next run | Scheduled re-scans / dependency-update automation |
-| Insecure Dockerfiles | Hadolint | Implemented | Doesn't catch runtime misconfig | Combine with runtime policy enforcement |
-| Unknown SBOM composition | Syft | Implemented | SBOM freshness depends on pipeline run | Attach SBOM to registry as attestation |
-| Vulnerable container images | Trivy (both), Grype (frontend) | Implemented | Zero-day/unscanned-layer risk | Add image signing/verification (Cosign/Sigstore) |
-| Invalid/insecure K8s manifests | kubeconform, kube-score | Implemented | Static checks only, not runtime enforcement | Add admission-control policy enforcement |
-| Runtime application vulnerabilities | OWASP ZAP DAST | Implemented | Scans pre-production surface only | Extend DAST coverage to authenticated flows |
-| Unauthorized public exposure of backend | Cloudflare Quick Tunnel instead of public NodePort | Implemented | Tunnel URL itself has no app-level auth at the edge | Cloudflare Access or stronger edge auth for non-dev environments (Recommended / Not implemented) |
-| Metrics/logs pipeline confusion or single point of failure | Clear separation: Prometheus (metrics) vs. Loki (logs); Client vs. Server distinction maintained | Implemented | N/A architecturally; access control to these systems still open | Prometheus/Grafana access controls (Recommended / Not implemented) |
-| Overly broad network access between workloads | — | Recommended / Not implemented | Lateral movement possible within cluster | Stricter NetworkPolicies |
-| Overly broad Kubernetes RBAC | — | Recommended / Not implemented | Elevation of privilege via over-scoped roles | Tighter Kubernetes RBAC |
-| Broad blast radius of local Shell CI runner | — | Recommended / Not implemented | Single compromised runner has direct Vault/K8s/Terraform access | Dedicated least-privilege CI service accounts; reduce Shell runner scope |
-| Lack of centralized Vault audit trail | — | Recommended / Not implemented | Delayed detection of Vault misuse | Vault audit logging and centralized audit analysis |
-| Unrestricted access to monitoring UIs | — | Recommended / Not implemented | Sensitive metrics/logs viewable by any cluster-internal actor | Access controls on Prometheus/Grafana |
-| No rate limiting at ingress/application layer | — | Recommended / Not implemented | Susceptible to abuse/DoS | Rate limiting at NGINX/application layer |
-| Unsigned container images | — | Recommended / Not implemented | Supply-chain tampering between build and deploy | Image signing/verification via Cosign/Sigstore |
-| Limited CI/CD provenance | — | Recommended / Not implemented | Harder to prove build integrity | Improved CI provenance/attestation |
-| Fragmented security event visibility | — | Recommended / Not implemented | Slower incident detection/response | Centralized security event monitoring, stronger audit logging |
-
+| Vulnerable dependencies | Snyk (backend & frontend), npm audit (frontend) | Implemented | New CVEs may appear after a scan | Scheduled re-scans / dependency-update automation |
+| Insecure Dockerfiles | Hadolint | Implemented | Static Dockerfile analysis does not guarantee runtime security | Combine with runtime policy enforcement |
+| Unknown SBOM composition | Syft | Implemented | SBOM freshness depends on pipeline execution | Attach SBOM to registry as attestation |
+| Vulnerable container images | Trivy (both), Grype (frontend) | Implemented | Zero-day/unscanned-layer risk remains | Add image signing/verification (Cosign/Sigstore) |
+| Invalid/insecure K8s manifests | kubeconform, kube-score | Implemented | Static checks only; no admission-time enforcement | Add admission-control policy enforcement |
+| Runtime application vulnerabilities | OWASP ZAP DAST | Implemented | Current DAST coverage may not exercise all authenticated application flows | Extend DAST coverage to authenticated flows |
+| Unauthorized public exposure of backend | Cloudflare Quick Tunnel instead of direct public NodePort exposure | Implemented | Tunnel URL itself does not provide application-level authentication | Cloudflare Access or stronger edge authentication for non-development environments |
+| Metrics/logs pipeline confusion or single point of failure | Clear separation between Prometheus metrics and Loki logs; Prometheus Client/instrumentation and Prometheus Server are distinct components | Implemented | Monitoring access control remains an architectural security concern | Add/strengthen Prometheus/Grafana access controls |
+| Overly broad network access between workloads | Kubernetes NetworkPolicies restricting workload/network communication | Implemented | Policy coverage may need to evolve as new workloads or communication paths are introduced | Periodically review NetworkPolicies and default-deny coverage |
+| Overly broad Kubernetes RBAC | Kubernetes RBAC reviewed and constrained where practical; stricter restrictions were evaluated against Vault/Kubernetes integration requirements | Partially implemented / constrained by required Vault integration | Some components require recurring Kubernetes/Vault access, so excessive restriction can break required functionality | Continue least-privilege review without removing required Vault/Kubernetes permissions |
+| Broad blast radius of local Shell CI runner | Local Shell runner has direct access to Minikube/Kubernetes, Vault and Terraform because deployment/runtime verification requires it | Recommended / Not fully mitigated | Compromise of the runner host could affect Kubernetes, Vault and Terraform | Dedicated least-privilege runner/service accounts; reduce runner scope where practical |
+| Lack of centralized Vault audit trail | Vault audit logging is not currently centralized into the security monitoring pipeline | Recommended / Not implemented | Delayed detection and investigation of Vault misuse | Enable Vault audit logging and centralize relevant security/audit events |
+| Unrestricted access to monitoring UIs | Prometheus/Grafana access controls are not fully hardened | Recommended / Not implemented | Sensitive metrics/logs may be accessible to unauthorized cluster-internal users | Enforce authentication and least-privilege access to monitoring interfaces |
+| No rate limiting at ingress/application layer | No confirmed application/ingress rate-limiting control | Recommended / Not implemented | Susceptible to request abuse and application-layer DoS | Implement rate limiting at NGINX and/or application layer |
+| Unsigned container images | Container images are scanned but not cryptographically signed/verified | Recommended / Not implemented | Supply-chain tampering between build and deployment remains possible | Image signing/verification via Cosign/Sigstore |
+| Limited CI/CD provenance | CI/CD performs scanning and artifact generation but does not provide full cryptographic build provenance/attestation | Recommended / Not implemented | Harder to prove artifact origin and build integrity | Improve CI provenance and build attestation |
+| Fragmented security event visibility | Prometheus/Loki/Grafana provide operational observability, but centralized security-event correlation is not implemented | Recommended / Not implemented | Security events may remain distributed across Kubernetes, Vault, GitLab, ingress and application logs | Centralize security/audit events and correlate them through a dedicated security monitoring capability |
 ---
 
 ## 22. Residual Risks & Future Recommendations
