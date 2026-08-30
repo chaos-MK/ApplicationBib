@@ -541,19 +541,30 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    subgraph AppMetrics [Application Metrics]
-        SB[Spring Boot] --> MC[Micrometer / Prometheus Client]
-        MC --> EP["/actuator/prometheus"]
-        EP --> PS[Prometheus Server]
+    subgraph FrontendMetrics [Frontend Metrics]
+        FE[Frontend - ritual-growth-ui]
+        FMC[Prometheus Client / Node.js Metrics]
+        FE --> FMC
     end
 
+    subgraph BackendMetrics [Backend Metrics]
+        BE[Backend - ApplicationBib]
+        MC[Micrometer / Prometheus Client]
+        EP["/actuator/prometheus"]
+        BE --> MC
+        MC --> EP
+    end
+
+    FMC --> PS[Prometheus Server]
+    EP --> PS
+
     subgraph K8sMetrics [Kubernetes State Metrics]
-        KA[Kubernetes API] --> KSM2[kube-state-metrics]
-        KSM2 --> PS
+        KA[Kubernetes API] --> KSM[kube-state-metrics]
+        KSM --> PS
     end
 
     subgraph DBMetrics [PostgreSQL Metrics]
-        PGDB[(PostgreSQL)] --> PGE[PostgreSQL Exporter]
+        PG[(PostgreSQL)] --> PGE[PostgreSQL Exporter]
         PGE --> PS
     end
 
