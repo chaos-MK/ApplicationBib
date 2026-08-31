@@ -4,6 +4,19 @@
 
 **Scope:** Frontend (`ritual-growth-ui`), Backend (`applicationbib`), Firebase Authentication, PostgreSQL, HashiCorp Vault, Kubernetes (Minikube), Cloudflare Quick Tunnel, monitoring/observability stack, CI/CD (GitLab), and Terraform-managed infrastructure.
 
+### Container Tooling
+
+The project uses daemonless container tooling throughout the container lifecycle:
+
+- **Podman** — daemonless container runtime and container management.
+- **Buildah** — daemonless OCI image building.
+- **Skopeo** — daemonless container image inspection and transfer between registries.
+
+From a security perspective, the daemonless model reduces reliance on a
+privileged long-running container daemon. These tools complement, but do not
+replace, dedicated security controls such as Trivy, Snyk, Gitleaks, Semgrep,
+kube-score, and kubeconform.
+
 ---
 
 ## 1. System Overview
@@ -329,6 +342,7 @@ Terraform is infrastructure-as-code applied out-of-band from request traffic —
 
 ## 11. Backend CI/CD Architecture
 
+Build tooling is daemonless/container-based: Buildah, Podman, Skopeo
 Two GitLab runner types are used.
 
 ### 11.1 Docker CI Runner (build/security validation)
@@ -688,52 +702,120 @@ flowchart TD
 
 ```mermaid
 flowchart TD
+
     subgraph B1[Boundary: Internet]
-      USR[User]
-    end
-    subgraph B2[Boundary: Cloudflare Edge]
-      CFT[Cloudflare Quick Tunnel]
-      CFTD[cloudflared daemon]
-    end
-    subgraph B3[Boundary: Kubernetes Ingress]
-      NG[NGINX Ingress]
-    end
-    subgraph B4[Boundary: Frontend App]
-      FEA[ritual-growth-ui Pod]
-    end
-    subgraph B5[Boundary: Backend App]
-      BEA[applicationbib Pod]
-    end
-    subgraph B6[Boundary: Firebase - External SaaS]
-      FBS[Firebase Authentication]
-    end
-    subgraph B7[Boundary: Data Layer]
-      PGB[(PostgreSQL)]
-    end
-    subgraph B8[Boundary: Secrets]
-      VLT[Vault]
-    end
-    subgraph B9[Boundary: K8s Control Plane]
-      CP[API Server / kube-system]
-    end
-    subgraph B10[Boundary: Observability]
-      OBS[Prometheus/Grafana/Loki/Alertmanager]
-    end
-    subgraph B11[Boundary: CI/CD]
-      CICD[GitLab + Runners]
-    end
-    subgraph B12[Boundary: Registry]
-      REG4[GitLab Container Registry]
+        USR[User]
     end
 
-    USR --> CFT --> CFTD --> NG --> FEA
+    subgraph B2[Boundary: Cloudflare Edge]
+        CFT[Cloudflare Quick Tunnel]
+        CFTD[cloudflared daemon]
+    end
+
+    subgraph B3[Boundary: Kubernetes Ingress]
+        NG[NGINX Ingress]
+    end
+
+    subgraph B4[Boundary: Frontend Application]
+        FEA[ritual-growth-ui Pod]
+    end
+
+    subgraph B5[Boundary: Backend Application]
+        BEA[ApplicationBib Pod]
+    end
+
+    subgraph B6[Boundary: Firebase - External SaaS]
+        FBS[Firebase Authentication]
+    end
+
+    subgraph B7[Boundary: Data Layer]
+        PGB[(PostgreSQL)]
+        PGE[PostgreSQL Exporter]
+    end
+
+    subgraph B8[Boundary: Secrets Management]
+        VLT[Vault]
+        VAI[Vault Agent Injector]
+    end
+
+    subgraph B9[Boundary: Kubernetes Control Plane]
+        CP[Kubernetes API Server]
+        KSM[kube-state-metrics]
+    end
+
+    subgraph B10[Boundary: Observability]
+        PS[Prometheus Server]
+        PEX[Podman Exporter]
+        POD[Podman]
+        ALLOY[Grafana Alloy]
+        LOKI[Loki]
+        GF[Grafana]
+        AM[Alertmanager]
+    end
+
+    subgraph B11[Boundary: CI/CD]
+        CICD[GitLab CI/CD + Runners]
+    end
+
+    subgraph B12[Boundary: Container Registry]
+        REG4[GitLab Container Registry]
+    end
+
+    %% External access
+    USR --> CFT
+    CFT --> CFTD
+    CFTD --> NG
+
+    %% Ingress
+    NG --> FEA
     NG --> BEA
+
+    %% Authentication
     FEA --> FBS
     BEA --> FBS
+
+    %% Application data
     BEA --> PGB
-    VLT --> BEA
-    CP --> OBS
-    CICD --> REG4 --> FEA
+
+    %% Secrets injection
+    VLT --> VAI
+    VAI --> BEA
+    VAI --> AM
+
+    %% Kubernetes state metrics
+    CP --> KSM
+    KSM --> PS
+
+    %% PostgreSQL metrics
+    PGB --> PGE
+    PGE --> PS
+
+    %% Podman metrics
+    POD --> PEX
+    PEX --> PS
+
+    %% Backend application metrics
+    BEA --> PS
+
+    %% Cluster-wide logs
+    FEA --> ALLOY
+    BEA --> ALLOY
+    PGB --> ALLOY
+    VLT --> ALLOY
+    ALLOY --> LOKI
+
+    %% Observability
+    PS --> GF
+    LOKI --> GF
+    PS --> AM
+
+    %% Alert notifications
+    AM --> WEBHOOK[Webhook]
+    AM --> EMAIL[Email]
+
+    %% CI/CD artifact flow
+    CICD --> REG4
+    REG4 --> FEA
     REG4 --> BEA
 ```
 
@@ -896,43 +978,52 @@ These implemented controls still carry residual risk if their policies, permissi
 
 ## 23. Final Summary
 
-1. **Reaching the system:** Users reach Ritual Growth over the Internet via a Cloudflare Quick Tunnel, which forwards traffic to the NGINX Ingress Controller inside the Minikube cluster; NGINX routes requests to the frontend, backend, or Grafana Services based on ingress rules.
+1. **Reaching the system:** Users reach Ritual Growth over the Internet via a Cloudflare Quick Tunnel, which forwards traffic to the NGINX Ingress Controller inside the Minikube cluster. NGINX routes requests to the frontend, backend, or Grafana Services according to the configured ingress rules.
 
-2. **Firebase authentication:** The frontend uses the Firebase Web SDK for registration, login, and session/token management; the backend independently verifies each request's Firebase ID token server-side via the Firebase Admin SDK (`verifyIdToken`).
+2. **Firebase authentication:** The frontend uses the Firebase Web SDK for registration, login, and session/token management. The backend independently verifies each request's Firebase ID token server-side using the Firebase Admin SDK (`verifyIdToken`).
 
-3. **Frontend configuration:** Production Firebase Web configuration values are injected at **build time** through GitLab CI/CD variables, passed to Buildah as `--build-arg` values, converted to Dockerfile `ARG`/`ENV`, and baked into the Next.js production image. Vault plays no role in this frontend configuration path. Because these are `NEXT_PUBLIC_*` values, they are not treated as confidential secrets.
+3. **Frontend configuration:** Production Firebase Web configuration values are injected at build time through GitLab CI/CD variables, passed to the container build process as build arguments, and exposed through Dockerfile `ARG`/`ENV` variables for the Next.js production build. Vault plays no role in this frontend configuration path. Because these are `NEXT_PUBLIC_*` values, they are configuration values rather than confidential secrets.
 
-4. **Backend credential protection:** The backend's Firebase service-account credential is managed by HashiCorp Vault and injected at runtime into the backend pod (`/vault/secrets/firebase.json`) via the Vault Agent Injector using Kubernetes authentication. The credential is not stored in the frontend, PostgreSQL, source repository, or container image.
+4. **Backend credential protection:** The backend's sensitive credentials are managed by HashiCorp Vault and injected at runtime into the backend pod through the Vault Agent Injector using Kubernetes authentication. This includes the Firebase service-account credentials and PostgreSQL database credentials. The credentials are not stored in the frontend, source repository, or container image.
+
 
 5. **Application data:** After authentication, the backend reads and writes application data directly to PostgreSQL. Firebase Authentication and PostgreSQL are separate systems and are not represented as a linear authentication-to-database chain.
 
-6. **Metrics:** Application metrics flow from Micrometer/Actuator (`/actuator/prometheus`) to the Prometheus Server. Kubernetes state metrics flow through kube-state-metrics, and PostgreSQL metrics flow through the PostgreSQL Exporter. These metrics converge on Prometheus Server and are queried by Grafana.
+6. **Metrics:** Application metrics flow from Micrometer/Spring Boot Actuator (`/actuator/prometheus`) to Prometheus Server. Kubernetes state metrics flow through kube-state-metrics, PostgreSQL metrics flow through the PostgreSQL Exporter, and container/runtime metrics are collected through the configured monitoring exporters. These metrics converge on Prometheus Server and are queried by Grafana.
 
 7. **Frontend monitoring:** The confirmed frontend monitoring consists of CPU usage, memory usage, Node.js heap used, Node.js heap total, event-loop lag, active Node.js handles, and active Node.js requests. These metrics are represented in the Terraform-provisioned seven-panel `ritual-growth-ui` Grafana dashboard. No unverified frontend request-rate or error-rate metrics are claimed.
 
-8. **Logs:** Frontend and backend container logs are collected by Grafana Alloy and sent to Loki. Grafana queries Loki separately from Prometheus metrics. Prometheus is therefore treated as the metrics system, while Loki is the log storage/query system.
+8. **Logs:** Grafana Alloy is responsible for collecting container/application logs from the deployed solution components and forwarding them to Loki. Loki provides centralized log storage and querying, while Grafana provides log visualization. Prometheus is therefore treated as the metrics system, while Loki is the log storage/query system.
 
-9. **Alerts:** Prometheus Server evaluates alerting rules and sends fired alerts to Alertmanager. Alertmanager performs notification routing to the configured webhook and/or email destinations. Prometheus does not directly perform email/webhook notification delivery.
+9. **Alerts and Alertmanager credentials:** Prometheus Server evaluates alerting rules and sends fired alerts to Alertmanager. Alertmanager performs notification routing to the configured webhook and email destinations. Alertmanager's SMTP credentials are stored in HashiCorp Vault and injected at runtime through the Vault Agent Injector. Prometheus does not directly perform email notification delivery.
 
-10. **Terraform:** Terraform manages the Kubernetes/Helm infrastructure and monitoring configuration, including ingress, kube-prometheus-stack, Loki, Grafana dashboards, ServiceMonitors, and related monitoring resources. Terraform is an infrastructure-as-code control-plane tool and is not a runtime dependency of the frontend or backend.
 
-11. **Cloudflare:** The Cloudflare Quick Tunnel and its `cloudflared` daemon are managed separately through the documented tunnel script and are **not managed by Terraform**. The Quick Tunnel provides external access to the Minikube ingress without directly exposing the backend NodePort to the public Internet. Firebase remains responsible for application-level authentication.
+10. **Terraform:** Terraform manages the Kubernetes/Helm infrastructure and monitoring configuration, including ingress, kube-prometheus-stack, Loki, Grafana dashboards, ServiceMonitors, exporters, and related monitoring resources. Terraform is an infrastructure-as-code control-plane tool and is not a runtime dependency of the frontend or backend.
 
-12. **Network security:** Kubernetes NetworkPolicies have been implemented to restrict workload communication according to the required application and observability flows. Residual risk remains from any explicitly permitted communication paths and from compromise of an allowed workload.
+11. **Cloudflare:** The Cloudflare Quick Tunnel and its `cloudflared` daemon are managed separately through the documented tunnel script and are not managed by Terraform. The Quick Tunnel provides external access to the Minikube ingress without directly exposing the backend NodePort to the public Internet. Firebase remains responsible for application-level authentication.
 
-13. **Vault security:** Vault Kubernetes authentication, workload-scoped policy controls, and secret TTL controls are implemented. Further policy refinement and centralized Vault audit logging remain possible improvements.
+12. **Network security:** Kubernetes NetworkPolicies have been implemented to restrict workload communication according to the required application, database, Vault, and observability flows. Residual risk remains from explicitly permitted communication paths and from compromise of an allowed workload.
+
+13. **Vault security:** HashiCorp Vault is used as the central secret-management system for sensitive runtime credentials. The Vault Agent Injector injects secrets into the workloads that require them, including the backend's Firebase service-account and PostgreSQL credentials and Alertmanager's SMTP credentials. Vault Kubernetes authentication, workload-scoped policy controls, and secret TTL controls are implemented. Further policy refinement and centralized Vault audit logging remain possible improvements.
 
 14. **Kubernetes RBAC:** Kubernetes RBAC has been reviewed and tightened where practical. Stricter restrictions were evaluated against the requirements of Vault Kubernetes authentication. Workloads that authenticate to Vault require the relevant Kubernetes ServiceAccount/token relationship, so disabling or removing those required permissions indiscriminately would break the Vault authentication flow.
 
-15. **CI/CD supply-chain security:** The backend pipeline uses Docker-based build/security validation and a local Shell runner for deployment and runtime verification. The frontend pipeline uses Docker-based Buildah/Podman/Skopeo tooling. Security controls include Gitleaks, Semgrep, SonarQube, Snyk, npm audit, tests, Hadolint, Syft, Trivy, Grype, kubeconform, kube-score, and OWASP ZAP as applicable to each pipeline.
+15. **CI/CD supply-chain security:** The CI/CD pipelines perform source, dependency, build, container, and Kubernetes security validation. Security controls include Gitleaks, Semgrep, SonarQube/SonarCloud, Snyk, npm audit where applicable, automated tests, Hadolint, Syft, Trivy, Grype, kubeconform, kube-score, and OWASP ZAP as applicable to each pipeline.
 
-16. **Implemented observability:** The implemented observability stack consists of Micrometer/Actuator instrumentation, Prometheus Server, kube-state-metrics, PostgreSQL Exporter, Grafana, Alertmanager, Grafana Alloy, and Loki. Terraform manages the relevant monitoring infrastructure and Grafana dashboards.
+    Container tooling includes:
+    - Podman — daemonless container runtime and container management.
+    - Buildah — daemonless OCI container image building.
+    - Skopeo — daemonless container image inspection and transfer.
 
-17. **Implemented security controls:** Firebase ID-token authentication and server-side verification, Vault-managed backend credentials, Kubernetes-authenticated Vault access, Vault TTL controls, Kubernetes NetworkPolicies, reviewed/tightened RBAC, secrets/SAST/dependency/container scanning, SBOM generation, Dockerfile linting, Kubernetes manifest/security validation, OWASP ZAP DAST, monitoring/alerting, and Cloudflare Quick Tunnel-based external access are implemented controls.
+    These tools support the container lifecycle but are not considered substitutes for dedicated security controls such as vulnerability scanning, SAST, secret scanning, SBOM generation, and Kubernetes security validation.
+
+16. **Implemented observability:** The implemented observability stack consists of Micrometer/Spring Boot Actuator, Prometheus Server, kube-state-metrics, PostgreSQL Exporter, Podman/container monitoring exporters where configured, Grafana, Alertmanager, Grafana Alloy, and Loki. Terraform manages the relevant monitoring infrastructure, exporters, ServiceMonitors, and Grafana dashboards.
+
+17. **Implemented security controls:** Firebase ID-token authentication and server-side verification, Vault-managed and runtime-injected Firebase/PostgreSQL/SMTP credentials, Kubernetes-authenticated Vault access, Vault TTL controls, Kubernetes NetworkPolicies, reviewed/tightened RBAC, secrets/SAST/dependency/container scanning, SBOM generation, Dockerfile linting, Kubernetes manifest/security validation, OWASP ZAP DAST, monitoring/alerting, and Cloudflare Quick Tunnel-based external access are implemented controls.
 
 18. **Remaining future work:** The principal remaining improvements are stronger edge authentication for non-development environments, additional Vault/Kubernetes policy refinement where practical, dedicated least-privilege CI service accounts, reducing the local Shell runner's blast radius, Vault audit logging, monitoring UI access controls, rate limiting, image signing/verification, stronger CI/CD provenance, centralized security audit-event aggregation, and centralized security-event detection/correlation.
 
-19. **Audit logging distinction:** Existing Alloy → Loki provides centralized application/container log collection. This should not be confused with **centralized security audit logging**, which would additionally collect security-specific audit events such as Vault access/policy changes, Kubernetes audit events, CI/CD security events, and administrative actions into a common analysis layer.
+19. **Audit logging distinction:** Existing Alloy → Loki provides centralized application/container log collection. This should not be confused with centralized security audit logging, which would additionally collect security-specific audit events such as Vault access/policy changes, Kubernetes audit events, CI/CD security events, and administrative actions into a common analysis layer.
 
 20. **Security-event monitoring distinction:** Centralized security-event monitoring is a future capability for detecting, correlating, and alerting on suspicious security activity across those audit sources. The existing Prometheus/Alertmanager stack provides operational and metric-based alerting but is not represented as a complete SIEM/SOC-style security-event monitoring system.
 
