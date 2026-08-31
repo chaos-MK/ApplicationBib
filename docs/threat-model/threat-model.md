@@ -825,30 +825,32 @@ flowchart TD
 
 | Component | Technology | Role | Data Handled | Trust Boundary | Security Relevance |
 |---|---|---|---|---|---|
-| Frontend app | Next.js 15.3.3 / React 19 | User-facing UI, auth initiation | UI state, Firebase ID token (in-browser) | Frontend application | XSS, token handling, build-arg secret exposure |
-| Firebase Web SDK | Firebase JS SDK 11.9.1 | Client-side auth calls | Firebase API key, auth tokens | Frontend / Firebase boundary | Public API key exposure is expected but must be scoped correctly |
+| Frontend app | Next.js 15.3.3 / React 19 | User-facing UI, auth initiation | UI state, Firebase ID token (in-browser) | Frontend application | XSS, token handling, build-time configuration |
+| Firebase Web SDK | Firebase JS SDK 11.9.1 | Client-side authentication calls | Firebase API key, auth tokens | Frontend / Firebase boundary | Public API key exposure is expected but must be scoped correctly |
 | Firebase Authentication | Firebase (SaaS) | Identity provider | Credentials, ID tokens | Firebase managed services | External dependency; token forgery/replay risk if mishandled |
-| Backend app | Spring Boot / Maven | API, business logic, token verification | Firebase ID tokens, app data | Backend application | Central enforcement point for authZ/authN |
-| Firebase Admin SDK | Firebase Admin (Java) | Server-side token verification | Firebase service-account credential | Backend / Firebase boundary | Credential compromise = full auth bypass capability |
-| PostgreSQL | PostgreSQL | Application data store | User/application records | Data layer | SQLi, data exposure, backup handling |
-| Vault Server | HashiCorp Vault | Secrets management | Firebase service-account JSON | Secrets boundary | Central secret custody; policy misconfig risk |
-| Vault Agent Injector | Vault K8s Injector | Sidecar-based secret injection | Injected secret files | Secrets boundary / Backend | Injector misconfig could leak secrets to wrong pod |
-| NGINX Ingress | NGINX Ingress Controller | L7 routing into cluster | HTTP(S) traffic, TLS termination (if configured) | Ingress boundary | Misrouting, ingress misconfig, TLS handling |
-| Cloudflare Quick Tunnel | Cloudflare Tunnel | External edge/tunnel | All inbound HTTP traffic | Internet / Cloudflare boundary | Tunnel token compromise, lack of edge auth in current setup |
-| `cloudflared` daemon | Cloudflare Tunnel client | Maintains outbound tunnel connection from Minikube host to Cloudflare edge | All inbound HTTP traffic (in transit) | Cloudflare edge / Minikube host boundary | Host-level process compromise would expose the tunnel; managed by its own script, not Terraform |
-| Prometheus Client (Micrometer) | Micrometer / Actuator | Metrics instrumentation | Internal app metrics | Backend application | Endpoint exposure if unauthenticated |
-| Prometheus Server | Prometheus | Metrics scrape/store/alert-eval | Time-series metrics | Monitoring boundary | Unauthorized scrape/query access |
-| kube-state-metrics | kube-state-metrics | K8s object state metrics | Cluster object metadata | Monitoring boundary / K8s API | Exposes cluster topology info |
-| PostgreSQL Exporter | postgres_exporter | DB metrics exposition | DB performance metrics | Monitoring boundary | Could leak query/perf metadata |
-| Grafana | Grafana | Dashboards/visualization | Metrics + logs (via datasources) | Monitoring boundary | Dashboard/auth access control |
-| Alertmanager | Alertmanager | Alert routing/notification | Alert payloads | Monitoring boundary | Webhook/email endpoint exposure |
-| Grafana Alloy | Grafana Alloy | Log collection agent | Container log streams | Monitoring boundary | Log tampering/interception in transit |
-| Loki | Loki | Log aggregation/storage | Application/container logs | Monitoring boundary | Sensitive data leakage via logs |
-| GitLab CI/CD | GitLab | Pipeline orchestration | Source code, CI variables, secrets | CI/CD boundary | Variable exposure, pipeline injection |
-| GitLab Container Registry | GitLab Registry | Image storage | Built container images | Registry boundary | Image tampering, unauthorized pull/push |
-| Docker CI Runner | Docker executor | Build & security validation | Source code, build artifacts | CI runner boundary | Compromised runner = supply chain risk |
-| Local Shell Runner | Shell executor | Deploy & runtime verification | kubeconfig, Vault tokens, Terraform state | CI runner boundary | Broadest blast radius — direct cluster/Vault access |
-| Terraform | Terraform | Infrastructure as code | Infra/monitoring configuration, state | IaC boundary | State file sensitivity, drift, apply permissions |
+| Backend app | Spring Boot / Maven | API, business logic, token verification | Firebase ID tokens, application data | Backend application | Central enforcement point for authentication and authorization |
+| Firebase Admin SDK | Firebase Admin Java SDK | Server-side token verification | Firebase service-account credential | Backend / Firebase boundary | Credential compromise could grant privileged Firebase access |
+| PostgreSQL | PostgreSQL | Application data store | User/application records, database credentials | Data layer | SQL injection, data exposure, credential protection |
+| Vault Server | HashiCorp Vault | Secrets management | Firebase, PostgreSQL, and Alertmanager/SMTP credentials | Secrets boundary | Central secret custody; policy misconfiguration risk |
+| Vault Agent Injector | Vault Kubernetes Injector | Runtime secret injection | Injected secret files | Secrets boundary / Workloads | Injector misconfiguration could expose secrets to unintended workloads |
+| NGINX Ingress | NGINX Ingress Controller | L7 routing into cluster | HTTP(S) traffic | Ingress boundary | Misrouting, ingress misconfiguration, TLS handling |
+| Cloudflare Quick Tunnel | Cloudflare Tunnel | External edge/tunnel | Inbound HTTP traffic | Internet / Cloudflare boundary | Provides external access but does not provide application-level authentication |
+| `cloudflared` daemon | Cloudflare Tunnel client | Maintains outbound tunnel connection | Tunnel traffic in transit | Cloudflare edge / Minikube host boundary | Host/process compromise could affect external access |
+| Prometheus Client (Micrometer) | Micrometer / Spring Boot Actuator | Application metrics instrumentation | Internal application metrics | Backend application | Metrics endpoint exposure if unauthenticated |
+| Prometheus Server | Prometheus | Metrics scrape, storage, and alert evaluation | Time-series metrics | Monitoring boundary | Unauthorized scrape/query/configuration access |
+| kube-state-metrics | kube-state-metrics | Kubernetes object-state metrics | Cluster object metadata | Monitoring / Kubernetes API boundary | Exposes cluster topology and workload state |
+| PostgreSQL Exporter | postgres_exporter | PostgreSQL metrics exposition | Database performance metrics | Monitoring / Database boundary | Exporter permissions or exposure could leak database metadata |
+| Podman | Podman | Daemonless container engine used by CI/runtime tooling | Container images, containers, build artifacts | CI / container runtime boundary | Daemonless architecture reduces reliance on a privileged long-running Docker daemon |
+| Buildah | Buildah | Container image building | Source code, build context, image layers | CI / build boundary | Rootless/daemonless image builds reduce container-runtime attack surface |
+| Skopeo | Skopeo | Container image transfer and registry operations | Container images, registry credentials | CI / registry boundary | Enables controlled image copying/inspection without requiring a container daemon |
+| Grafana | Grafana | Dashboards and visualization | Metrics and logs | Monitoring boundary | Dashboard, datasource, and authentication access control |
+| Alertmanager | Alertmanager | Alert routing and notification | Alert payloads, SMTP configuration | Monitoring boundary | Notification credential protection and alert-routing security |
+| Grafana Alloy | Grafana Alloy | Cluster-wide container log collection and forwarding | Container/application logs from workloads | Monitoring boundary | Sensitive data may enter logs; collector configuration requires protection |
+| Loki | Loki | Log aggregation and storage | Container/application logs | Monitoring boundary | Unauthorized log access or ingestion could expose sensitive information |
+| GitLab CI/CD | GitLab | Pipeline orchestration | Source code, CI variables, secrets, artifacts | CI/CD boundary | Pipeline injection, variable exposure, and supply-chain risks |
+| GitLab Container Registry | GitLab Registry | Container image storage | Built container images | Registry boundary | Image tampering and unauthorized push/pull access |
+| Local Shell Runner | GitLab Shell executor | Deployment and runtime verification | kubeconfig, Vault credentials/tokens, Terraform state | CI runner boundary | Broad blast radius; compromise could affect Kubernetes, Vault, and infrastructure |
+| Terraform | Terraform | Infrastructure as code | Kubernetes/Helm configuration, monitoring configuration, state | IaC boundary | State sensitivity, configuration tampering, and excessive apply permissions |
 
 ---
 
@@ -955,7 +957,7 @@ The following items represent **remaining risks or future improvements**. Contro
 - Dedicated least-privilege CI service accounts, especially for the local Shell runner
 - Reducing the blast radius of the local Shell runner
 - Vault audit logging and centralized analysis of Vault audit events
-- Access controls on Prometheus and Grafana
+- Stronger access controls on Prometheus and Grafana
 - Rate limiting at the ingress/application layer
 - Image signing and verification using Cosign/Sigstore
 - Improved CI/CD provenance and build attestation
@@ -966,12 +968,16 @@ The following items represent **remaining risks or future improvements**. Contro
 
 The following controls have already been implemented or explicitly reviewed and therefore are **not treated as missing controls**:
 
-- Kubernetes NetworkPolicies are implemented to restrict network communication between workloads according to the required application/monitoring flows.
-- Vault access is scoped using Kubernetes authentication and workload-specific Vault policy controls.
+- Kubernetes NetworkPolicies are implemented to restrict network communication between workloads according to the required application and monitoring flows.
+- Vault access is scoped using Kubernetes authentication and workload-specific Vault policies.
 - Vault secret TTL controls have been configured.
+- The backend's Firebase service-account credentials and PostgreSQL credentials are injected at runtime through the Vault Agent Injector.
+- Alertmanager SMTP credentials are also injected at runtime through the Vault Agent Injector rather than being stored directly in the application configuration.
 - Kubernetes RBAC has been reviewed and tightened where practical. Further restriction was evaluated against the requirements of Vault Kubernetes authentication; the Kubernetes ServiceAccount/token relationship required by Vault must remain available to workloads that authenticate to Vault.
-- Application/container logs are centrally collected through Grafana Alloy → Loki → Grafana.
+- Application and infrastructure/container logs are centrally collected by Grafana Alloy and forwarded to Loki, covering the deployed solution components for which pod/container logs are available.
 - Prometheus Server → Alertmanager provides centralized operational/metric alert routing to the configured webhook and email destinations.
+- Prometheus and Loki remain separate observability systems: Prometheus stores metrics, while Loki stores logs.
+- Terraform manages the relevant Kubernetes/Helm monitoring infrastructure and Grafana dashboard provisioning.
 
 These implemented controls still carry residual risk if their policies, permissions, credentials, or underlying workloads are compromised.
 
