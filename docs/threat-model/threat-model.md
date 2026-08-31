@@ -177,7 +177,7 @@ Representative workloads:
 - PostgreSQL
 - NGINX Ingress Controller
 - Vault + Vault Agent Injector
-- Prometheus, kube-state-metrics, PostgreSQL Exporter
+- Prometheus(client & server), kube-state-metrics, PostgreSQL Exporter, Podman Exporter
 - Grafana, Alertmanager
 - Loki, Grafana Alloy
 
@@ -219,13 +219,13 @@ Each telemetry pipeline below is independent and is never collapsed into a singl
 
 The Spring Boot backend uses **Micrometer / Spring Boot Actuator Prometheus support** — this is the Prometheus **client**/instrumentation side, living *inside* the application:
 
-```
+```text
 Spring Boot Application → Micrometer / Prometheus instrumentation → /actuator/prometheus
 ```
 
 The Prometheus **Server** (a separate Kubernetes-deployed component) scrapes this endpoint, stores time series, and evaluates alerting rules:
 
-```
+```text
 /actuator/prometheus → Prometheus Server
 ```
 
@@ -233,7 +233,7 @@ Prometheus Server is never embedded inside Spring Boot, and the instrumentation 
 
 ### 9.2 Kubernetes State Metrics
 
-```
+```text
 Kubernetes API → kube-state-metrics → Prometheus Server
 ```
 
@@ -255,50 +255,62 @@ A Terraform-provisioned Grafana dashboard for `ritual-growth-ui` contains **seve
 
 ### 9.4 PostgreSQL Metrics
 
-```
+```text
 PostgreSQL → PostgreSQL Exporter → Prometheus Server → Grafana
 ```
 
 PostgreSQL never sends metrics directly to Grafana.
 
-### 9.5 Grafana
+### 9.5 Podman Host Metrics
 
+The solution also uses **Podman Exporter** to expose Podman host/container metrics to Prometheus:
+
+```text
+Podman → Podman Exporter → Prometheus Server → Grafana
 ```
+
+Podman Exporter provides infrastructure-level observability for the Podman environment. It is separate from PostgreSQL Exporter and kube-state-metrics.
+
+### 9.6 Grafana
+
+```text
 Prometheus Server → Grafana
 Loki → Grafana
 ```
 
-Grafana dashboards cover backend metrics, frontend infrastructure metrics, PostgreSQL metrics, Kubernetes metrics, and logs (via Loki). The `ritual-growth-ui` seven-panel dashboard is provisioned/managed by Terraform.
+Grafana dashboards cover backend metrics, frontend infrastructure metrics, PostgreSQL metrics, Podman infrastructure metrics, Kubernetes metrics, and logs via Loki. The `ritual-growth-ui` seven-panel dashboard is provisioned and managed by Terraform.
 
-### 9.6 Alertmanager
+### 9.7 Alertmanager
 
-```
+```text
 Prometheus Server → Alertmanager → Webhook
 Prometheus Server → Alertmanager → Email
 ```
 
 Alertmanager performs routing, grouping, and notification delivery. It does not generate application metrics, and Prometheus never emails directly — Alertmanager mediates all notification delivery.
 
-### 9.7 Grafana Alloy & Loki (Logs)
+### 9.8 Grafana Alloy & Loki (Logs)
 
+Grafana Alloy discovers Kubernetes pods and collects their container logs:
+
+```text
+Kubernetes workload pods → Grafana Alloy → Loki → Grafana
 ```
-Frontend container logs → Grafana Alloy → Loki
-Backend container logs → Grafana Alloy → Loki
-Loki → Grafana
-```
+
+The current Alloy configuration uses Kubernetes pod discovery and does not restrict collection to only the frontend, backend, or PostgreSQL pods.
 
 **Prometheus = metrics. Loki = logs.** Loki never stores Prometheus time series; Prometheus never stores application logs. Alloy is a distinct log-shipping component, not the Prometheus Server.
 
-### 9.8 Consolidated Observability Pipelines
+### 9.9 Consolidated Observability Pipelines
 
 | Pipeline | Flow |
 |---|---|
 | Application metrics | Spring Boot → Micrometer/Prometheus Client → `/actuator/prometheus` → Prometheus Server → Grafana |
 | Kubernetes state metrics | Kubernetes API → kube-state-metrics → Prometheus Server → Grafana |
 | PostgreSQL metrics | PostgreSQL → PostgreSQL Exporter → Prometheus Server → Grafana |
-| Container logs | Frontend + Backend containers → Grafana Alloy → Loki → Grafana |
+| Podman metrics | Podman → Podman Exporter → Prometheus Server → Grafana |
+| Container logs | Kubernetes workload pods → Grafana Alloy → Loki → Grafana |
 | Alerts | Prometheus Server → Alertmanager → Webhook / Email |
-
 ---
 
 ## 10. Terraform / Infrastructure as Code
@@ -460,6 +472,7 @@ flowchart TD
     U[Internet / User] --> CF[Cloudflare Quick Tunnel]
     CF --> CFD[cloudflared daemon]
     CFD --> NGINX[NGINX Ingress Controller]
+
     NGINX --> FEING[Frontend Ingress]
     NGINX --> BEING[ApplicationBib Ingress]
     NGINX --> GFING[Grafana Ingress]
@@ -477,30 +490,44 @@ flowchart TD
     BEPOD -- "Firebase Admin SDK\nverifyIdToken()" --> FBAUTH
     BEPOD --> PG[(PostgreSQL)]
 
+    %% Vault and secret injection
     VAULT[Vault Server] --> VAI[Vault Agent Injector]
-    VAI --> BEPOD
+    VAI -- "Firebase credentials\nDB credentials" --> BEPOD
+    VAI -- "SMTP / email credentials" --> AM[Alertmanager]
 
+    %% Metrics
     BEPOD -- "/actuator/prometheus" --> PROM[Prometheus Server]
     KAPI[Kubernetes API] --> KSM[kube-state-metrics] --> PROM
     PG --> PGEXP[PostgreSQL Exporter] --> PROM
+    PODMAN[Podman] --> PEXP[Podman Exporter] --> PROM
+
     PROM --> GFPOD
-    PROM --> AM[Alertmanager]
+    PROM --> AM
+
+    %% Alerting
     AM --> WEBHOOK[Webhook]
     AM --> EMAIL[Email]
 
-    FEPOD -- logs --> ALLOY[Grafana Alloy]
-    BEPOD -- logs --> ALLOY
-    ALLOY --> LOKI[Loki] --> GFPOD
+    %% Cluster-wide logging
+    K8SPODS[Kubernetes Components / Workload Pods] -- "Container logs" --> ALLOY[Grafana Alloy]
+    ALLOY -- "Log lines" --> LOKI[Loki]
+    LOKI --> GFPOD
 
+    %% CI/CD
     GITLAB[GitLab CI/CD] --> REGISTRY[GitLab Container Registry]
     REGISTRY --> FEPOD
     REGISTRY --> BEPOD
 
+    %% Infrastructure as Code
     TF[Terraform] --> K8S[Kubernetes / Helm]
-    K8S -.manages.-> PROM
-    K8S -.manages.-> GFPOD
-    K8S -.manages.-> LOKI
-    K8S -.manages.-> NGINX
+
+    K8S -. "manages" .-> PROM
+    K8S -. "manages" .-> GFPOD
+    K8S -. "manages" .-> LOKI
+    K8S -. "manages" .-> NGINX
+    K8S -. "manages" .-> ALLOY
+    K8S -. "manages" .-> AM
+    K8S -. "manages" .-> PEXP
 ```
 
 ### B. Authentication Architecture
@@ -571,6 +598,7 @@ flowchart TD
 
     subgraph VaultNamespace ["Namespace: vault"]
         VAULT[Vault]
+        VAI[Vault Agent Injector]
     end
 
     subgraph MonitoringNamespace ["Namespace: monitoring"]
@@ -581,6 +609,7 @@ flowchart TD
         PS[Prometheus Server]
         KSM[kube-state-metrics]
         PGE[PostgreSQL Exporter]
+        PEX[Podman Exporter]
 
         ALLOY[Grafana Alloy]
         LOKI[Loki]
@@ -592,6 +621,10 @@ flowchart TD
         KA[Kubernetes API]
     end
 
+    subgraph KubernetesComponents ["Kubernetes Components / Workload Pods"]
+        KPODS[All Kubernetes Pods]
+    end
+
     %% Frontend metrics
     FE --> FMC
     FMC --> PS
@@ -601,7 +634,7 @@ flowchart TD
     MC --> EP
     EP --> PS
 
-    %% Kubernetes metrics
+    %% Kubernetes state metrics
     KA --> KSM
     KSM --> PS
 
@@ -609,15 +642,15 @@ flowchart TD
     PG --> PGE
     PGE --> PS
 
+    %% Podman metrics
+    PEX --> PS
+    PODMAN[Podman] --> PEX
+
     %% Metrics visualization
     PS --> GF
 
-    %% Log collection
-    FE --> ALLOY
-    BE --> ALLOY
-    PG --> ALLOY
-    VAULT --> ALLOY
-    KA --> ALLOY
+    %% Cluster-wide log collection
+    KPODS -- "Container / application logs" --> ALLOY
 
     %% Log storage / visualization
     ALLOY --> LOKI
