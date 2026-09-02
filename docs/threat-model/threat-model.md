@@ -136,8 +136,23 @@ HashiCorp Vault runs inside Kubernetes with:
 - Vault Server
 - Vault Agent Injector
 - Kubernetes auth method
+- cert-manager (manages the TLS certificate used by the Vault Agent Injector's mutating admission webhook)
 
 Vault is used to securely provide runtime credentials to workloads that require them.
+
+**cert-manager:** cert-manager manages the TLS certificate used by the Vault Agent Injector admission webhook. The certificate is stored in `vault-agent-injector-tls`, automatically renewed, and consumed by the existing Vault Agent Injector. This removes the previous dependency on manually renewed/expiring injector certificates.
+
+cert-manager itself is installed and managed through Terraform. The Vault Injector Certificate resource (and its associated CA) is managed by cert-manager, which issues the certificate into the `vault-agent-injector-tls` Kubernetes Secret. The Vault Helm release (not itself Terraform-managed) is configured to consume that Secret for the Vault Agent Injector's webhook TLS, and cert-manager's CA injection is used to register the resulting CA bundle with the Kubernetes Mutating Webhook Configuration. The certificate uses a 24-hour duration, renews 2 hours before expiry, and has `rotationPolicy: Always` enabled, so rotation is fully automatic.
+
+Conceptually:
+```
+Terraform
+  → cert-manager
+    → Vault Injector Certificate / CA
+      → vault-agent-injector-tls Secret
+        → Vault Agent Injector
+          → Kubernetes Mutating Webhook
+```
 
 Active secret-consumption flows include:
 
@@ -190,6 +205,7 @@ Representative workloads:
 - PostgreSQL
 - NGINX Ingress Controller
 - Vault + Vault Agent Injector
+- cert-manager (manages the Vault Agent Injector's webhook TLS certificate)
 - Prometheus(client & server), kube-state-metrics, PostgreSQL Exporter, Podman Exporter
 - Grafana, Alertmanager
 - Loki, Grafana Alloy
@@ -509,6 +525,13 @@ flowchart TD
     VAI -- "Firebase credentials\nDB credentials" --> BEPOD
     VAI -- "SMTP / email credentials" --> AM[Alertmanager]
 
+    %% cert-manager / Vault Agent Injector webhook TLS
+    TF -- "installs" --> CM[cert-manager]
+    CM --> VIC["Vault Injector Certificate / CA"]
+    VIC --> VITLS["vault-agent-injector-tls Secret"]
+    VITLS --> VAI
+    VAI --> MWH[Kubernetes Mutating Webhook]
+
     %% Metrics
     BEPOD -- "/actuator/prometheus" --> PROM[Prometheus Server]
     KAPI[Kubernetes API] --> KSM[kube-state-metrics] --> PROM
@@ -586,6 +609,13 @@ flowchart LR
 
     AM --> ASEC["Injected Alertmanager SMTP/email credentials"]
     ASEC --> SMTP[SMTP / Email Service]
+
+    %% cert-manager manages the Vault Agent Injector webhook TLS certificate
+    TF2[Terraform] --> CM2[cert-manager]
+    CM2 --> VIC2["Vault Injector Certificate / CA"]
+    VIC2 --> VITLS2["vault-agent-injector-tls Secret"]
+    VITLS2 --> VAI
+    VAI --> MWH2[Kubernetes Mutating Webhook]
 ```
 
 ### E. Frontend Build Configuration
@@ -736,6 +766,7 @@ flowchart TD
     subgraph B8[Boundary: Secrets Management]
         VLT[Vault]
         VAI[Vault Agent Injector]
+        CM3[cert-manager]
     end
 
     subgraph B9[Boundary: Kubernetes Control Plane]
