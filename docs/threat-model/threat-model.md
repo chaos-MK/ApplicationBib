@@ -690,6 +690,12 @@ flowchart TD
     PEX --> PS
     PODMAN[Podman] --> PEX
 
+    %% Vault metrics
+    VAULT -- "/v1/sys/metrics" --> PS
+
+    %% Vault-supplied Alertmanager credentials
+    VAI -- "SMTP / email credentials" --> AM
+
     %% Metrics visualization
     PS --> GF
 
