@@ -61,6 +61,24 @@ resource "kubernetes_stateful_set" "postgres" {
             name       = "postgres-storage"
             mount_path = "/var/lib/postgresql/data"
           }
+
+          readiness_probe {
+            exec {
+              command = [
+                "pg_isready",
+                "-h",
+                "localhost",
+                "-p",
+                "5432",
+              ]
+            }
+
+            initial_delay_seconds = 10
+            period_seconds        = 10
+            timeout_seconds       = 1
+            failure_threshold     = 3
+            success_threshold     = 1
+          }
         }
         container {
           name    = "postgres-exporter"
