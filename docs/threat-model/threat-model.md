@@ -989,7 +989,73 @@ flowchart TD
 | Fragmented security event visibility | Prometheus/Loki/Grafana provide operational observability, but centralized security-event correlation is not implemented | Recommended / Not implemented | Security events remain distributed across Kubernetes, Vault, GitLab, ingress and application logs | Centralize security/audit events and correlate them through a dedicated security monitoring capability |
 ---
 
-## 22. Residual Risks & Future Recommendations
+## 22. Attack Paths
+
+This section traces plausible multi-step paths an attacker could take through the architecture, rather than treating each threat in isolation. These are analytical exercises — no attack has occurred against this environment. Each path lists the entry point, the steps that follow, and which existing controls interrupt it, so remaining exposure at each step is explicit.
+
+### Attack Path 1 — Local Shell CI Runner compromise → full-environment impact
+
+```text
+1. Attacker gains code execution on the local Shell CI runner
+   (e.g. via a malicious pipeline change, dependency, or compromised runner host)
+2. Runner already holds direct access to:
+     - kubeconfig / Kubernetes-Minikube
+     - Vault (used for deployment-time operations)
+     - Terraform (used for deployment-time operations)
+3. Attacker uses this access to:
+     - Read/modify Kubernetes workloads directly
+     - Read or alter Vault-managed secrets/policies
+     - Modify Terraform-managed infrastructure
+4. Result: compromise is no longer limited to the pipeline —
+   it extends to the cluster, secrets, and infrastructure state
+```
+
+**Existing controls that reduce impact:** Docker-based executor isolates build/security stages from the Local Shell runner; Vault policies and Kubernetes RBAC limit what the runner's credentials can do once inside Vault/Kubernetes; CI/CD security scanning (Gitleaks, Semgrep, Snyk, Trivy/Grype) reduces the chance of a malicious change reaching this stage undetected.
+
+**Residual exposure:** the Local Shell runner is explicitly documented (§21, §23) as the largest blast-radius component in the system. This path is the primary justification for that finding — it is the most direct route from a single compromised host to Kubernetes, Vault, and Terraform simultaneously.
+
+### Attack Path 2 — Backend pod compromise → credential and data exposure
+
+```text
+1. Attacker exploits a vulnerability in the backend application
+   (e.g. an undiscovered dependency or application-layer flaw)
+2. Attacker obtains code execution inside the Backend Pod
+3. The Backend Pod has Vault-injected credentials available on disk:
+     - Firebase service-account credentials
+     - PostgreSQL credentials
+4. Attacker uses these credentials to:
+     - Query/exfiltrate data directly from PostgreSQL
+     - Act as the Firebase Admin SDK identity against the Firebase project
+5. Result: compromise of one pod yields both database access and
+   elevated Firebase project access, not just that pod's own data
+```
+
+**Existing controls that reduce impact:** dependency/SAST/container scanning (Semgrep, SonarQube, Snyk, Trivy, Grype) aims to catch known vulnerabilities before deployment; non-root/UID 10001/dropped-capabilities/`readOnlyRootFilesystem` container hardening limits what an attacker can do post-exploitation; Vault policies scope which secrets the backend's Vault role can read; short secret TTLs limit how long a stolen credential remains valid.
+
+**Residual exposure:** credential scope is tied to the workload, not to a smaller per-operation scope — a compromised Backend Pod gets everything the backend's Vault role is entitled to, for as long as the TTL allows, matching the residual risk already noted in §21 ("Runtime credential exposure across multiple services").
+
+### Attack Path 3 — Vault Agent Injector webhook trust compromise
+
+```text
+1. Attacker gains sufficient Kubernetes/cert-manager privilege
+   (e.g. via excessive RBAC on the cert-manager ServiceAccount/ClusterRole)
+2. Attacker issues or substitutes a Certificate/Issuer resource
+   impersonating the Vault Injector Certificate/CA
+3. If successful, the forged certificate could be registered as trusted
+   for the Vault Agent Injector's mutating admission webhook
+4. Result: potential to influence what gets admitted/mutated at
+   pod-creation time, undermining the integrity of secret injection
+```
+
+**Existing controls that reduce impact:** cert-manager's CA injection ties the trusted CA bundle to a specific, Terraform-managed Certificate resource rather than an arbitrary one; Kubernetes RBAC restricts who can create/modify Certificate and Issuer resources; the 24-hour certificate duration with automatic renewal limits the usable window of any single certificate.
+
+**Residual exposure:** this path depends on first obtaining elevated Kubernetes/cert-manager privilege — it is a second-order path (requires another compromise first, e.g. Path 1) rather than an independently reachable entry point, and is listed for completeness because it directly affects the newly implemented cert-manager component (§5).
+
+These paths are not exhaustive. They illustrate how the individual threats already listed in the STRIDE table (§20) and Security Control Mapping (§21) can combine into larger-impact scenarios, and are intended to guide where mitigation effort has the highest leverage.
+
+---
+
+## 23. Residual Risks & Future Recommendations
 
 The following items represent **remaining risks or future improvements**. Controls that have already been implemented or explicitly evaluated are not listed here as missing controls.
 
@@ -1028,7 +1094,7 @@ These implemented controls still carry residual risk if their policies, permissi
 
 ---
 
-## 23. Final Summary
+## 24. Final Summary
 
 1. **Reaching the system:** Users reach Ritual Growth over the Internet via a Cloudflare Quick Tunnel, which forwards traffic to the NGINX Ingress Controller inside the Minikube cluster. NGINX routes requests to the frontend, backend, or Grafana Services according to the configured ingress rules.
 
