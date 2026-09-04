@@ -48,11 +48,11 @@ Beyond pipeline scanning, the deployed environment includes:
 A full architecture-level threat model, including trust boundaries, STRIDE analysis, attack paths, mitigations, and residual risks, is maintained at:
 
 ```text
-docs/threat-model/threat-model.md
+~/ApplicationBib/docs/threat-model/threat-model.md
 ```
 
 Risks that have been formally reviewed and accepted are tracked separately in:
 
 ```text
-docs/security-findings.md
+SECURITY-FINDINGS.md
 ```
