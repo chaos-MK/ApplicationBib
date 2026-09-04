@@ -14,6 +14,7 @@ source "$SECRETS_FILE"
 
 : "${POSTGRES_USERNAME:?POSTGRES_USERNAME is required}"
 : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+: "${POSTGRES_URL:?POSTGRES_URL is required}"
 : "${ALERTMANAGER_SMTP_USERNAME:?ALERTMANAGER_SMTP_USERNAME is required}"
 : "${ALERTMANAGER_SMTP_PASSWORD:?ALERTMANAGER_SMTP_PASSWORD is required}"
 : "${FIREBASE_SERVICE_ACCOUNT_JSON:?FIREBASE_SERVICE_ACCOUNT_JSON is required}"
@@ -44,7 +45,11 @@ if ! kubectl exec -n "$VAULT_NAMESPACE" vault-0 -- vault status >/dev/null 2>&1;
   exit 1
 fi
 
-SEALED="$(kubectl exec -n "$VAULT_NAMESPACE" vault-0 -- vault status -format=json | sed -n 's/.*"sealed":[[:space:]]*\(true\|false\).*/\1/p')"
+SEALED="$(
+  kubectl exec -n "$VAULT_NAMESPACE" vault-0 -- \
+    vault status -format=json |
+    sed -n 's/.*"sealed":[[:space:]]*\(true\|false\).*/\1/p'
+)"
 
 if [[ "$SEALED" != "false" ]]; then
   echo "ERROR: Vault is sealed."
@@ -56,15 +61,24 @@ echo "✓ Vault reachable and unsealed"
 echo
 echo "[4/4] Writing secrets..."
 
-kubectl exec -i -n "$VAULT_NAMESPACE" vault-0 --   vault kv put -cas=1 secret/applicationbib/db   username="$POSTGRES_USERNAME"   password="$POSTGRES_PASSWORD"
+kubectl exec -i -n "$VAULT_NAMESPACE" vault-0 -- \
+  vault kv put secret/applicationbib/db \
+  url="$POSTGRES_URL" \
+  username="$POSTGRES_USERNAME" \
+  password="$POSTGRES_PASSWORD"
 
 echo "✓ PostgreSQL credentials written"
 
-kubectl exec -i -n "$VAULT_NAMESPACE" vault-0 --   vault kv put -cas=1 secret/applicationbib/firebase   service-account.json="$FIREBASE_SERVICE_ACCOUNT_JSON"
+kubectl exec -i -n "$VAULT_NAMESPACE" vault-0 -- \
+  vault kv put secret/applicationbib/firebase \
+  service-account.json="$FIREBASE_SERVICE_ACCOUNT_JSON"
 
 echo "✓ Firebase service-account credential written"
 
-kubectl exec -i -n "$VAULT_NAMESPACE" vault-0 --   vault kv put secret/alertmanager/smtp   username="$ALERTMANAGER_SMTP_USERNAME"   password="$ALERTMANAGER_SMTP_PASSWORD"
+kubectl exec -i -n "$VAULT_NAMESPACE" vault-0 -- \
+  vault kv put secret/alertmanager/smtp \
+  username="$ALERTMANAGER_SMTP_USERNAME" \
+  password="$ALERTMANAGER_SMTP_PASSWORD"
 
 echo "✓ Alertmanager SMTP credentials written"
 
