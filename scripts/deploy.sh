@@ -13,12 +13,22 @@ kubectl cluster-info >/dev/null
 echo "✓ Kubernetes reachable"
 
 echo
-echo "[2/3] Applying ApplicationBib manifests..."
-kubectl apply -f "$ROOT_DIR/k8s/app/"
+echo "[2/3] Applying Terraform-managed infrastructure..."
+terraform -chdir="$ROOT_DIR/terraform" apply -auto-approve
+echo "✓ Terraform apply completed"
 
 echo
-echo "[3/3] Waiting for ApplicationBib rollout..."
+echo "[3/3] Waiting for application rollouts..."
+
 kubectl rollout status deployment/applicationbib \
+  -n default \
+  --timeout=180s
+
+kubectl rollout status deployment/ritual-growth-ui \
+  -n default \
+  --timeout=180s
+
+kubectl rollout status statefulset/postgres \
   -n default \
   --timeout=180s
 
@@ -27,5 +37,5 @@ echo "======================================"
 echo " Deployment completed successfully"
 echo "======================================"
 
-kubectl get deployment applicationbib -n default
+kubectl get deployment applicationbib ritual-growth-ui -n default
 kubectl get statefulset postgres -n default
