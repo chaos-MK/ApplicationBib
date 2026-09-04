@@ -19,6 +19,7 @@ The platform consists of:
 - Cloudflare Quick Tunnel
 - HashiCorp Vault
 - Vault Agent Injector
+- cert-manager
 - Prometheus
 - Grafana
 - Alertmanager
@@ -694,6 +695,28 @@ Secret TTL controls are also configured.
 
 Sensitive credentials are not committed to the public repository or baked into the frontend image.
 
+### cert-manager and Vault Agent Injector webhook TLS
+
+cert-manager manages the TLS certificate used by the Vault Agent Injector's mutating admission webhook. The certificate is stored in the `vault-agent-injector-tls` Secret, automatically renewed, and consumed by the existing Vault Agent Injector. This removes the previous dependency on manually renewed/expiring injector certificates.
+
+cert-manager itself is installed and managed through Terraform. The Vault Helm release is not itself Terraform-managed, but it is configured to consume the certificate that cert-manager issues.
+
+```text
+Terraform
+   ↓
+cert-manager
+   ↓
+Vault Injector Certificate / CA
+   ↓
+vault-agent-injector-tls Secret
+   ↓
+Vault Agent Injector
+   ↓
+Kubernetes Mutating Webhook
+```
+
+The certificate uses a 24-hour duration, renews 2 hours before expiry, and has `rotationPolicy: Always` enabled, so rotation is fully automatic. cert-manager CA injection registers the resulting CA bundle with the Kubernetes Mutating Webhook Configuration.
+
 ---
 
 ## 22. Network Security
@@ -781,6 +804,7 @@ Implemented controls include:
 - Vault Kubernetes authentication
 - Vault policy scoping
 - Vault secret TTL controls
+- cert-manager–automated Vault Agent Injector webhook TLS issuance/rotation
 - Kubernetes NetworkPolicies
 - Kubernetes RBAC review
 - Non-root containers
@@ -890,7 +914,36 @@ Deployment should be performed through documented scripts and Terraform rather t
 
 ---
 
-## 29. Required Secrets / CI Variables
+## 29. Automation Scripts
+
+Deployment and operational tasks are automated through scripts under:
+
+```text
+scripts/
+```
+
+```text
+scripts/
+├── bootstrap-vault-secrets.sh
+├── deploy.sh
+├── rotate-registry-secret.sh
+├── start-ritual-growth-tunnel.sh
+└── verify-deployment.sh
+```
+
+| Script | Purpose |
+|---|---|
+| `bootstrap-vault-secrets.sh` | Initializes/loads the required secrets into Vault (Firebase service-account credentials, PostgreSQL credentials, Alertmanager SMTP credentials) so the Vault Agent Injector can supply them to workloads |
+| `deploy.sh` | Runs the end-to-end deployment workflow (Terraform/Helm apply, Kubernetes deployment, rollout verification) |
+| `rotate-registry-secret.sh` | Rotates the GitLab Container Registry pull secret used by Kubernetes workloads |
+| `start-ritual-growth-tunnel.sh` | Starts the Cloudflare Quick Tunnel and `cloudflared` daemon used for external access during development/testing |
+| `verify-deployment.sh` | Runs post-deployment verification checks (pod/rollout status, application health, monitoring, Vault injection) |
+
+These scripts replace ad hoc, workstation-specific commands with a documented, repeatable automation layer, and are the primary entry points referenced by the deployment runbook.
+
+---
+
+## 30. Required Secrets / CI Variables
 
 Sensitive values must be supplied through secure CI/CD variables, Vault, or another appropriate secret-management mechanism.
 
@@ -945,7 +998,7 @@ Private keys, passwords, service-account JSON, tokens, and other confidential cr
 
 ---
 
-## 30. Local Setup
+## 31. Local Setup
 
 The local environment uses:
 
@@ -992,11 +1045,20 @@ Verify workloads:
 kubectl get pods -A
 ```
 
-The project should be deployed using the documented automation rather than depending on the original developer's workstation-specific commands.
+Bootstrap Vault secrets, deploy the platform, expose it externally, and verify the deployment using the documented automation scripts (see [29. Automation Scripts](#29-automation-scripts)):
+
+```bash
+./scripts/bootstrap-vault-secrets.sh
+./scripts/deploy.sh
+./scripts/start-ritual-growth-tunnel.sh
+./scripts/verify-deployment.sh
+```
+
+The project should be deployed using this documented automation rather than depending on the original developer's workstation-specific commands. See [docs/runbook/RUN.md](docs/runbook/RUN.md) for the full step-by-step procedure and [docs/runbook/STOP.md](docs/runbook/STOP.md) for teardown.
 
 ---
 
-## 31. Troubleshooting
+## 32. Troubleshooting
 
 ### Kubernetes
 
@@ -1064,9 +1126,32 @@ A failed security stage should be investigated rather than bypassed without unde
 
 ---
 
-## 32. Deployment Runbook
+## 33. Deployment Runbook
 
-The deployment runbook should provide reproducible procedures for:
+Reproducible operational procedures are documented under:
+
+```text
+docs/runbook/
+```
+
+```text
+docs/runbook/
+├── deployment.md
+├── RUN.md
+├── secret-rotation.md
+├── secrets.env
+└── STOP.md
+```
+
+| File | Purpose |
+|---|---|
+| `RUN.md` | Step-by-step procedure to bring the full environment up (Minikube/Kubernetes, Terraform/Helm, Vault, application, monitoring), typically driving `scripts/deploy.sh` and `scripts/bootstrap-vault-secrets.sh` |
+| `deployment.md` | Detailed deployment procedure and verification steps for the platform |
+| `secret-rotation.md` | Procedure for rotating Vault-managed credentials and the registry pull secret, corresponding to `scripts/rotate-registry-secret.sh` and `scripts/bootstrap-vault-secrets.sh` |
+| `secrets.env` | Local, git-ignored environment file used to supply required secret values to the automation scripts (not committed with real values) |
+| `STOP.md` | Procedure to safely stop/tear down the local environment |
+
+The runbook covers reproducible procedures for:
 
 ### Infrastructure
 
@@ -1111,6 +1196,7 @@ Exporter verification
 
 ```text
 Vault verification
+cert-manager / Vault Agent Injector webhook TLS verification
 NetworkPolicy verification
 RBAC verification
 Container security verification
@@ -1120,7 +1206,7 @@ DAST verification
 
 ### Recovery
 
-The runbook should also document:
+The runbook also documents:
 
 - Failed rollout recovery
 - Pod restart procedures
@@ -1134,7 +1220,7 @@ The objective is that another engineer can operate the platform without knowing 
 
 ---
 
-## 33. Secret Rotation
+## 34. Secret Rotation
 
 Sensitive runtime credentials are managed through Vault.
 
@@ -1157,6 +1243,20 @@ Rotation applies to credentials such as:
 - Alertmanager SMTP credentials
 - Registry/deployment credentials where applicable
 - Vault authentication credentials/tokens
+- Vault Agent Injector webhook TLS certificate (`vault-agent-injector-tls`, automated by cert-manager — see [21. Vault + Vault Agent Injector](#21-vault--vault-agent-injector))
+
+Vault-managed credential and registry-secret rotation is automated through:
+
+```text
+scripts/bootstrap-vault-secrets.sh
+scripts/rotate-registry-secret.sh
+```
+
+The corresponding operational procedure is documented in:
+
+```text
+docs/runbook/secret-rotation.md
+```
 
 General procedure:
 
@@ -1173,9 +1273,11 @@ General procedure:
 
 Credentials must never be rotated by committing new secret values to Git.
 
+Note: the Vault Agent Injector webhook TLS certificate itself is not rotated through this manual procedure — it is rotated automatically by cert-manager (24-hour duration, renewal 2 hours before expiry, `rotationPolicy: Always`).
+
 ---
 
-## 34. Monitoring and Observability Summary
+## 35. Monitoring and Observability Summary
 
 The observability architecture separates metrics, logs, dashboards, and alert routing.
 
@@ -1253,7 +1355,7 @@ Alertmanager
 
 ---
 
-## 35. Grafana Dashboards
+## 36. Grafana Dashboards
 
 Grafana dashboards are managed through Terraform.
 
@@ -1283,7 +1385,7 @@ Terraform provisions the dashboard through the monitoring configuration.
 
 ---
 
-## 36. Observability vs Security Monitoring
+## 37. Observability vs Security Monitoring
 
 The project distinguishes operational observability from centralized security monitoring.
 
@@ -1323,7 +1425,7 @@ This distinction prevents operational monitoring from being incorrectly represen
 
 ---
 
-## 37. Repository Structure
+## 38. Repository Structure
 
 The repository is organized around application code, infrastructure, deployment automation, CI/CD, and documentation.
 
@@ -1336,9 +1438,20 @@ ApplicationBib/
 │           └── ritual-growth-ui-dashboard.json
 ├── terraform/
 ├── scripts/
+│   ├── bootstrap-vault-secrets.sh
+│   ├── deploy.sh
+│   ├── rotate-registry-secret.sh
+│   ├── start-ritual-growth-tunnel.sh
+│   └── verify-deployment.sh
 ├── docs/
-│   └── threat-model/
-│       └── threat-model.md
+│   ├── threat-model/
+│   │   └── threat-model.md
+│   └── runbook/
+│       ├── deployment.md
+│       ├── RUN.md
+│       ├── secret-rotation.md
+│       ├── secrets.env
+│       └── STOP.md
 ├── Dockerfile
 ├── pom.xml
 └── .gitlab-ci.yml
@@ -1348,7 +1461,7 @@ The exact structure may evolve as deployment automation and operational runbooks
 
 ---
 
-## 38. Reproducibility
+## 39. Reproducibility
 
 The project is designed so that another engineer can reproduce and operate the environment without relying on undocumented workstation-specific commands.
 
@@ -1384,7 +1497,7 @@ are intentionally excluded from source control.
 
 ---
 
-## 39. Project Status
+## 40. Project Status
 
 Implemented:
 
@@ -1402,6 +1515,7 @@ Implemented:
 - ✅ Vault Agent Injector
 - ✅ Vault Kubernetes authentication
 - ✅ Vault secret TTL controls
+- ✅ cert-manager (automated Vault Agent Injector webhook TLS issuance/rotation)
 - ✅ Prometheus
 - ✅ Grafana
 - ✅ Alertmanager
@@ -1432,10 +1546,12 @@ Implemented:
 - ✅ Centralized container/workload logging
 - ✅ Monitoring and alerting
 - ✅ STRIDE threat model
+- ✅ Deployment automation scripts (`scripts/`)
+- ✅ Operational runbook documentation (`docs/runbook/`)
 
 ---
 
-## 40. Future Improvements
+## 41. Future Improvements
 
 The following are explicitly future improvements:
 
@@ -1458,7 +1574,7 @@ These items are not represented as currently implemented controls.
 
 ---
 
-## 41. Security Philosophy
+## 42. Security Philosophy
 
 The project follows a defense-in-depth DevSecOps model.
 
@@ -1500,7 +1616,7 @@ The architecture intentionally separates:
 
 ---
 
-## 42. Security Disclaimer
+## 43. Security Disclaimer
 
 This project is a DevSecOps engineering and portfolio environment.
 
