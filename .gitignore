@@ -38,3 +38,6 @@ terraform/*.tfstate.*
 
 # Local dashboard backups
 k8s/monitoring/dashboards/*.json.backup
+
+# Local Azure environment
+azure.env
