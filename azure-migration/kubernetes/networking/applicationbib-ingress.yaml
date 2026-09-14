@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: applicationbib
+  namespace: applicationbib
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - <AZURE_APPLICATION_HOST>
+      secretName: applicationbib-tls
+  rules:
+    - host: <AZURE_APPLICATION_HOST>
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: applicationbib
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ritual-growth-ui
+                port:
+                  number: 3000
