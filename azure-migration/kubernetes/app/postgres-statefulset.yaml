@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: applicationbib
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+
+  template:
+    metadata:
+      labels:
+        app: postgres
+      annotations:
+        azure.workload.identity/use: "true"
+
+    spec:
+      serviceAccountName: postgres-azure-sa
+
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:16
+          imagePullPolicy: Always
+
+          command: ["/bin/sh", "-c"]
+
+          args:
+            - |
+              export POSTGRES_DB="$(cat /mnt/secrets-store/POSTGRES_DB)"
+              export POSTGRES_USER="$(cat /mnt/secrets-store/POSTGRES_USER)"
+              export POSTGRES_PASSWORD="$(cat /mnt/secrets-store/POSTGRES_PASSWORD)"
+              exec docker-entrypoint.sh postgres
+
+          ports:
+            - containerPort: 5432
+
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - localhost
+                - -p
+                - "5432"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+                - DAC_OVERRIDE
+                - SETUID
+                - SETGID
+
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+              ephemeral-storage: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+              ephemeral-storage: "1Gi"
+
+        - name: postgres-exporter
+          image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+          imagePullPolicy: Always
+
+          command: ["/bin/sh", "-c"]
+
+          args:
+            - |
+              POSTGRES_DB="$(cat /mnt/secrets-store/POSTGRES_DB)"
+              POSTGRES_USER="$(cat /mnt/secrets-store/POSTGRES_USER)"
+              POSTGRES_PASSWORD="$(cat /mnt/secrets-store/POSTGRES_PASSWORD)"
+
+              export DATA_SOURCE_NAME="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable"
+
+              exec postgres_exporter
+
+          ports:
+            - containerPort: 9187
+              name: metrics
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+              ephemeral-storage: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+              ephemeral-storage: "256Mi"
+
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: postgres-azure-secrets
