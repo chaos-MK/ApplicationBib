@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: applicationbib
+  namespace: applicationbib
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: applicationbib
+  template:
+    metadata:
+      labels:
+        app: applicationbib
+      annotations:
+        azure.workload.identity/use: "true"
+
+    spec:
+      serviceAccountName: applicationbib-azure-sa
+
+      containers:
+        - name: applicationbib
+          image: applicationbibacr.azurecr.io/applicationbib:latest
+          imagePullPolicy: Always
+
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "k8s"
+
+            - name: FIREBASE_CREDENTIALS
+              value: "/mnt/secrets-store/firebase.json"
+
+          ports:
+            - containerPort: 8080
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "384Mi"
+              ephemeral-storage: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "768Mi"
+              ephemeral-storage: "512Mi"
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: applicationbib-azure-secrets
