@@ -15,20 +15,24 @@ spec:
     - {}
 
   egress:
+    # Azure Database for PostgreSQL Flexible Server.
+    # Replace this deployment-time placeholder with the actual
+    # private PostgreSQL network CIDR before applying to Azure.
     - to:
-        - podSelector:
-            matchLabels:
-              app: postgres
+        - ipBlock:
+            cidr: <AZURE_POSTGRES_PRIVATE_CIDR>
       ports:
         - protocol: TCP
           port: 5432
 
+    # DNS
     - ports:
         - protocol: UDP
           port: 53
         - protocol: TCP
           port: 53
 
+    # HTTPS: Firebase, Azure services, Key Vault, etc.
     - ports:
         - protocol: TCP
           port: 443

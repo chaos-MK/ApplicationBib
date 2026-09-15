@@ -29,7 +29,8 @@ spec:
 
           args:
             - |
-              export POSTGRES_DB="$(cat /mnt/secrets-store/POSTGRES_DB)"
+              POSTGRES_URL="$(cat /mnt/secrets-store/POSTGRES_URL)"
+              export POSTGRES_DB="${POSTGRES_URL##*/}"
               export POSTGRES_USER="$(cat /mnt/secrets-store/POSTGRES_USER)"
               export POSTGRES_PASSWORD="$(cat /mnt/secrets-store/POSTGRES_PASSWORD)"
               exec docker-entrypoint.sh postgres
@@ -86,7 +87,8 @@ spec:
 
           args:
             - |
-              POSTGRES_DB="$(cat /mnt/secrets-store/POSTGRES_DB)"
+              POSTGRES_URL="$(cat /mnt/secrets-store/POSTGRES_URL)"
+              POSTGRES_DB="${POSTGRES_URL##*/}"
               POSTGRES_USER="$(cat /mnt/secrets-store/POSTGRES_USER)"
               POSTGRES_PASSWORD="$(cat /mnt/secrets-store/POSTGRES_PASSWORD)"
 
