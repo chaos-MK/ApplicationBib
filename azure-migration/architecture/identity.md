@@ -155,15 +155,12 @@ The application identity is intended to access the secrets required by the backe
 
 # PostgreSQL Workload Identity
 
-PostgreSQL uses a separate ServiceAccount:
+The target Azure architecture uses **Azure Database for PostgreSQL Flexible Server**, so the managed database does not require a Kubernetes ServiceAccount or Kubernetes Workload Identity.
 
-```text
-postgres-azure-sa
-```
+The `postgres-azure-sa` ServiceAccount and separate PostgreSQL managed identity are retained only for the **optional self-hosted PostgreSQL StatefulSet reference manifests** under `azure-migration/kubernetes/app/` and `azure-migration/kubernetes/secrets/`.
 
-and a separate managed identity.
+Reference architecture:
 
-```text
 PostgreSQL Pod
        |
        v
@@ -180,11 +177,10 @@ PostgreSQL Managed Identity
        |
        v
 Azure Key Vault
-```
 
-This prevents the PostgreSQL workload from sharing the ApplicationBib identity.
+This reference identity is not part of the target Azure Database for PostgreSQL Flexible Server architecture.
 
----
+For the managed PostgreSQL target, the application uses its own Workload Identity to access the required Key Vault secrets, while the managed database is accessed through its private database endpoint.
 
 # Federated Identity Credentials
 
@@ -250,7 +246,7 @@ firebase-service-account
 PostgreSQL identity accesses:
 
 ```text
-postgres-db
+postgres-url
 postgres-username
 postgres-password
 ```

@@ -170,19 +170,23 @@ The migration retains NetworkPolicies from the existing Kubernetes architecture.
 
 ### ApplicationBib
 
-The backend allows:
+The Azure target backend allows:
 
 ```text
 ApplicationBib
     |
-    +--> PostgreSQL :5432
+    +--> Azure Database for PostgreSQL :5432
     |
     +--> DNS :53
     |
     +--> HTTPS :443
 ```
 
-### PostgreSQL
+The PostgreSQL destination is represented by the deployment-time `<AZURE_POSTGRES_PRIVATE_CIDR>` placeholder in the Azure NetworkPolicy. The actual private database network must be supplied when the Azure networking configuration is finalized.
+
+### Self-hosted PostgreSQL reference policy
+
+The `postgres-networkpolicy.yaml` manifest belongs to the optional self-hosted PostgreSQL StatefulSet reference architecture.
 
 PostgreSQL accepts:
 
@@ -191,10 +195,12 @@ ApplicationBib
        |
        | TCP 5432
        v
-PostgreSQL
+PostgreSQL pod
 ```
 
 Monitoring access to the PostgreSQL exporter is allowed from the monitoring namespace.
+
+This self-hosted PostgreSQL policy is not part of the target Azure Database for PostgreSQL Flexible Server architecture.
 
 The existing local NetworkPolicies remain untouched.
 

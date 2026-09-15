@@ -114,7 +114,7 @@ The current PostgreSQL deployment receives its credentials through Vault.
 The Azure migration stores the equivalent secrets in Key Vault:
 
 ```text
-postgres-db
+postgres-url
 postgres-username
 postgres-password
 ```
@@ -124,7 +124,7 @@ Target flow:
 ```text
 Azure Key Vault
       |
-      +--> postgres-db
+      +--> postgres-url
       |
       +--> postgres-username
       |
@@ -134,7 +134,13 @@ Azure Key Vault
       Secrets Store CSI Driver
               |
               v
-       PostgreSQL Pod
+ applicationbib-runtime-secrets
+              |
+              v
+       ApplicationBib Pod
+              |
+              v
+         Spring Boot
 ```
 
 The actual secret values are not part of the migration repository.
@@ -173,15 +179,12 @@ The identity receives only the permissions required to retrieve the application 
 
 ## PostgreSQL Workload Identity
 
-PostgreSQL uses a separate ServiceAccount:
+The target Azure architecture uses **Azure Database for PostgreSQL Flexible Server**, so the managed database does not require a Kubernetes ServiceAccount or Kubernetes Workload Identity.
 
-```text
-postgres-azure-sa
-```
+The `postgres-azure-sa` ServiceAccount and separate PostgreSQL managed identity are retained only for the **optional self-hosted PostgreSQL StatefulSet reference manifests**.
 
-A separate managed identity is used for PostgreSQL secret access.
+Reference architecture:
 
-```text
 PostgreSQL Pod
        |
        v
@@ -195,9 +198,10 @@ PostgreSQL Managed Identity
        |
        v
 Azure Key Vault
-```
 
-This separates application secret access from PostgreSQL secret access.
+This reference identity is not part of the target Azure Database for PostgreSQL Flexible Server architecture.
+
+For the managed PostgreSQL target, the ApplicationBib workload uses its own Workload Identity to retrieve the required PostgreSQL connection secrets from Key Vault. The managed database is then accessed through its private database endpoint.
 
 ---
 
@@ -242,15 +246,26 @@ The backend reads:
 
 ## PostgreSQL secret mapping
 
-The PostgreSQL migration maps:
+The Azure application migration maps the PostgreSQL secrets into the
+`synchronized Kubernetes Secret` named `applicationbib-runtime-secrets`:
 
-| Key Vault secret | Mounted filename |
+| Key Vault secret | Kubernetes Secret key |
 |---|---|
-| `postgres-db` | `POSTGRES_DB` |
+| `postgres-url` | `POSTGRES_URL` |
 | `postgres-username` | `POSTGRES_USER` |
 | `postgres-password` | `POSTGRES_PASSWORD` |
 
-The PostgreSQL container reads these values from the mounted secret files.
+The ApplicationBib Deployment consumes these values through Kubernetes
+`secretKeyRef` environment variables:
+
+```text
+POSTGRES_URL
+POSTGRES_USER
+POSTGRES_PASSWORD
+        |
+        v
+Spring Boot datasource configuration
+```
 
 ---
 
@@ -333,7 +348,9 @@ Workload Identity provides short-lived Azure authentication based on federated i
 
 ### Least privilege
 
-ApplicationBib and PostgreSQL use separate managed identities.
+The target Azure application uses a dedicated managed identity for ApplicationBib secret access.
+
+The separate PostgreSQL managed identity applies only to the optional self-hosted PostgreSQL reference architecture.
 
 Each identity should receive only the Key Vault permissions required by its workload.
 
@@ -343,7 +360,7 @@ The following must never be committed:
 
 ```text
 firebase-service-account
-postgres-db
+postgres-url
 postgres-username
 postgres-password
 ```
@@ -474,7 +491,7 @@ A future Azure deployment would follow:
 10. Verify secret mounts
 ```
 
-No secrets are created or deployed by this migration lab because the Azure subscription is disabled.
+No secrets are created or deployed by this migration lab.
 
 ---
 
@@ -484,7 +501,7 @@ No secrets are created or deployed by this migration lab because the Azure subsc
 - ApplicationBib Firebase credentials are mapped to `firebase-service-account`.
 - PostgreSQL credentials are mapped to three Key Vault secrets.
 - ApplicationBib Workload Identity is defined.
-- PostgreSQL Workload Identity is defined.
+- PostgreSQL Workload Identity is documented only for the optional self-hosted PostgreSQL reference manifests.
 - SecretProviderClass migration manifests exist.
 - Existing Vault configuration remains untouched.
 - No real secrets have been copied to Azure.

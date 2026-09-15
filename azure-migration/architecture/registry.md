@@ -114,7 +114,7 @@ podman push \
 
 These commands are documentation examples only.
 
-No image is migrated while the Azure subscription is disabled.
+No image has been migrated to Azure; the registry configuration is documented as a migration target.
 
 ---
 

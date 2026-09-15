@@ -148,24 +148,19 @@ Spring Boot
       v
 Azure Database for PostgreSQL
 ```
+The Azure migration uses the following Key Vault secrets as the source of PostgreSQL connection configuration:
 
-The required PostgreSQL secrets remain:
-
-```text
-POSTGRES_DB
-POSTGRES_USER
-POSTGRES_PASSWORD
-```
+- `postgres-url`
+- `postgres-username`
+- `postgres-password`
 
 Actual values must never be committed to Git.
 
-The Azure migration already defines these secrets for Key Vault:
+For the reference self-hosted PostgreSQL workload, `POSTGRES_DB` is derived from the database name contained in `postgres-url`; it is not stored as a separate Azure Key Vault secret. The corresponding runtime variables are:
 
-```text
-postgres-db
-postgres-username
-postgres-password
-```
+- `POSTGRES_DB` — derived from `postgres-url`
+- `POSTGRES_USER` — derived from `postgres-username`
+- `POSTGRES_PASSWORD` — derived from `postgres-password`
 
 ---
 

@@ -144,7 +144,7 @@ These remain intentionally undeployed.
 
 # 5. Why Azure Is Not Deployed
 
-The Azure subscription currently available for the learning environment is disabled/read-only for resource creation.
+The Azure resources described in this migration workspace have not been deployed.
 
 Therefore this repository does not claim that Azure resources have been provisioned.
 
@@ -440,15 +440,19 @@ Contains:
 - backend NetworkPolicy
 - PostgreSQL NetworkPolicy
 
-The target ingress uses:
-
-```text
-<AZURE_APPLICATION_HOST>
-```
-
-as a placeholder.
+The target ingress uses <AZURE_APPLICATION_HOST> as a placeholder.
 
 No real production domain is assumed.
+
+### Deployment-time placeholders
+
+The Kubernetes manifests under azure-migration/kubernetes/ also contain ${AZ_*} placeholders for environment-specific Azure values such as the Key Vault name, tenant ID, and Workload Identity client IDs.
+
+These placeholders are migration artifacts. Kubernetes does not perform shell-style ${...} variable substitution when applying YAML.
+
+For a real deployment, the values must be supplied or substituted by the deployment workflow before the manifests are applied. No secrets or actual credential values are committed to this repository.
+
+The migration workspace intentionally does not execute or render these manifests.
 
 ---
 
@@ -966,7 +970,7 @@ This migration documentation does **not** claim:
 - that a production domain exists
 - that Cloudflare is used in the Azure target
 - that Firebase Authentication is replaced by Entra ID
-- that the frontend receives Firebase configuration from Key Vault
+- that the frontend Firebase Web configuration is provided through Azure secret injection
 
 In particular:
 

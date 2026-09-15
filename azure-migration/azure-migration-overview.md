@@ -1,4 +1,4 @@
-````markdown
+
 # ApplicationBib / Ritual Growth — Azure Migration Architecture Overview
 
 ## 1. Purpose
@@ -525,7 +525,7 @@ The target database should not be publicly exposed.
 The target stores PostgreSQL credentials in Azure Key Vault:
 
 ```text
-postgres-db
+postgres-url
 postgres-username
 postgres-password
 ```
@@ -793,30 +793,41 @@ The backend is the only application component that communicates with PostgreSQL.
 
 # 21. Kubernetes Network Policies
 
-The migration manifests include NetworkPolicies.
+### Azure target NetworkPolicy
 
-The backend policy allows the backend to communicate with:
+The Azure backend NetworkPolicy allows the ApplicationBib backend to communicate with:
 
 ```text
-PostgreSQL :5432
+Azure Database for PostgreSQL Flexible Server :5432
 DNS :53
 HTTPS :443
 ```
+The PostgreSQL destination is represented by the deployment-time
+<AZURE_POSTGRES_PRIVATE_CIDR> placeholder because the actual Azure
+private database network is not known until the Azure networking
+configuration is finalized.
 
-The PostgreSQL policy allows:
+### Self-hosted PostgreSQL reference policy
+
+The `postgres-networkpolicy.yaml` manifest belongs to the optional
+self-hosted PostgreSQL StatefulSet reference architecture.
+
+It allows:
 
 ```text
 ApplicationBib
       |
       | TCP 5432
       v
-PostgreSQL
+PostgreSQL pod
 ```
 
-and monitoring access to the PostgreSQL metrics port where applicable.
+and monitoring access to the PostgreSQL exporter where applicable.
+
+This self-hosted PostgreSQL policy is not part of the target
+Azure Database for PostgreSQL Flexible Server architecture.
 
 These manifests are migration artifacts and have not been applied to an Azure cluster.
-
 ---
 
 # 22. Monitoring Architecture
@@ -1615,7 +1626,7 @@ In particular:
 - no production database has been migrated
 - no Azure ingress has been deployed
 
-The Azure subscription is currently unavailable for resource creation.
+The Azure resources described in this migration workspace have not been deployed.
 
 ---
 
@@ -1623,7 +1634,7 @@ The Azure subscription is currently unavailable for resource creation.
 
 The migration environment was prepared as a learning exercise.
 
-The Azure subscription is currently disabled/read-only for resource creation.
+The Azure resources described in this migration workspace have not been deployed.
 
 Therefore the Azure infrastructure scripts and manifests are treated as:
 
@@ -1722,7 +1733,7 @@ Populate only the required secrets:
 
 ```text
 firebase-service-account
-postgres-db
+postgres-url
 postgres-username
 postgres-password
 ```
@@ -2006,13 +2017,7 @@ The Azure services that would replace or augment the current local infrastructur
 
 No Azure component described as a migration target should be interpreted as already deployed.
 
-Most importantly:
-
-```text
-Vault → Frontend
-```
-
-is **not** part of the architecture.
+Most importantly, the frontend Firebase Web configuration remains a build-time GitLab CI/CD configuration and is not provided through Azure secret injection.
 
 The frontend Firebase Web configuration continues to originate from GitLab CI/CD build variables.
 

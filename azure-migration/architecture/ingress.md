@@ -142,4 +142,4 @@ It does not mean that:
 - the TLS secret has been created
 - the public endpoint exists
 
-The current Azure subscription is unavailable for deployment, so these resources are documented as the target migration architecture.
+These resources are documented as the target migration architecture and have not been deployed.

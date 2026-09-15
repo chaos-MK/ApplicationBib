@@ -1,7 +1,7 @@
 # ApplicationBib — Azure Cloud Architecture
 
-> **Status:** Azure migration design / implementation-ready configuration.  
-> This Azure environment has **not been deployed** because the Azure subscription is currently disabled.  
+> **Status:** Azure migration design / implementation-ready configuration.
+> This Azure environment has **not been deployed**. The configuration in this directory represents the Azure migration target.
 > The existing ApplicationBib Minikube/Terraform implementation remains unchanged.
 
 ## 1. Objective
@@ -503,4 +503,4 @@ The goal is to identify the minimum infrastructure, identity, networking, storag
 | Existing Minikube infrastructure | **Unchanged** |
 | Existing Terraform | **Unchanged** |
 
-> **Important:** The Azure subscription is currently disabled, so the Azure configuration in this workspace is an implementation-ready migration exercise rather than evidence of deployed Azure resources.
+> **Important:** The Azure configuration in this workspace is an implementation-ready migration exercise rather than evidence of deployed Azure resources.
