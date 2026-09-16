@@ -1,0 +1,37 @@
+# ApplicationBib Azure migration example values.
+# Copy to terraform.tfvars only for an actual deployment.
+# Never commit real credentials or secret values.
+
+location                    = "westeurope"
+resource_group_name         = "applicationbib-azure-rg"
+acr_name                    = "applicationbibacr"
+aks_name                    = "applicationbib-aks"
+key_vault_name              = "applicationbib-kv"
+log_analytics_workspace_name = "applicationbib-law"
+monitor_workspace_name      = "applicationbib-amw"
+
+vnet_name                   = "applicationbib-vnet"
+aks_subnet_name             = "aks-subnet"
+vnet_address_space          = ["10.20.0.0/16"]
+aks_subnet_address_prefixes = ["10.20.0.0/22"]
+
+pod_cidr       = "10.244.0.0/16"
+service_cidr   = "10.30.0.0/16"
+dns_service_ip = "10.30.0.10"
+
+node_count   = 1
+node_vm_size = "Standard_B2s"
+
+app_namespace       = "applicationbib"
+app_service_account = "applicationbib-azure-sa"
+
+postgres_identity_name            = "applicationbib-postgres-identity"
+postgres_subnet_name              = "postgres-subnet"
+postgres_subnet_address_prefixes  = ["10.20.4.0/24"]
+postgres_server_name              = "applicationbib-postgres"
+postgres_database_name            = "applicationbib"
+postgres_admin_username           = "applicationbib_admin"
+
+# Replace only at deployment time.
+# Never commit a real password.
+postgres_admin_password = "CHANGE_ME_AT_DEPLOYMENT"
