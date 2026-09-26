@@ -1,0 +1,9 @@
+---
+# ApplicationBib Azure migration — monitoring configuration.
+# Static deployment artifact; not executed against Minikube.
+
+- name: Deploy backend ServiceMonitor
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ azure.application_namespace }}"
+    template: backend-servicemonitor.yml.j2
