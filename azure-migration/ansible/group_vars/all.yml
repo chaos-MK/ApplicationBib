@@ -1,0 +1,39 @@
+---
+# ApplicationBib Azure migration — static Ansible configuration.
+# These are deployment-time placeholders.
+# Do not store real credentials or secrets here.
+
+azure:
+  resource_group: "applicationbib-azure-rg"
+  location: "westeurope"
+  aks_name: "applicationbib-aks"
+  acr_name: "applicationbibacr"
+  key_vault_name: "applicationbib-kv"
+  application_namespace: "applicationbib"
+  application_service_account: "applicationbib-azure-sa"
+  application_identity_client_id: "<AZURE_WORKLOAD_IDENTITY_CLIENT_ID>"
+  tenant_id: "<AZURE_TENANT_ID>"
+
+application:
+  frontend_image: "applicationbibacr.azurecr.io/ritual-growth-ui:<IMAGE_TAG>"
+  backend_image: "applicationbibacr.azurecr.io/applicationbib:<IMAGE_TAG>"
+  frontend_service: "ritual-growth-ui"
+  backend_service: "applicationbib"
+
+database:
+  host: "<AZURE_POSTGRES_PRIVATE_HOST>"
+  port: 5432
+  database: "applicationbib"
+
+firebase:
+  project_id: "ritual-growth-ui-f7055"
+
+kubernetes:
+  ingress_host: "<AZURE_APPLICATION_HOST>"
+  tls_secret: "applicationbib-tls"
+
+deployment:
+  image_pull_policy: "IfNotPresent"
+  replicas:
+    frontend: 1
+    backend: 1

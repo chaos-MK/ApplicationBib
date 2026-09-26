@@ -1,0 +1,14 @@
+---
+# ApplicationBib Azure migration — static Ansible entry point.
+# This playbook is documentation/deployment preparation only.
+# Do not execute against the existing Minikube cluster.
+
+- name: Prepare ApplicationBib Azure workload
+  hosts: deployment_controller
+  gather_facts: false
+
+  roles:
+    - namespace
+    - application
+    - ingress
+    - monitoring
