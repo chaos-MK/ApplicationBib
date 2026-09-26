@@ -1,0 +1,10 @@
+---
+# ApplicationBib Azure migration — namespace preparation.
+# Static deployment artifact; not executed against Minikube.
+
+- name: Create ApplicationBib namespace
+  kubernetes.core.k8s:
+    api_version: v1
+    kind: Namespace
+    name: "{{ azure.application_namespace }}"
+    state: present
