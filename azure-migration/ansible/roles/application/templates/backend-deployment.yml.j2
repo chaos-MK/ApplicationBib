@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ application.backend_service }}
+  namespace: {{ azure.application_namespace }}
+  labels:
+    app: {{ application.backend_service }}
+
+spec:
+  replicas: {{ deployment.replicas.backend }}
+
+  selector:
+    matchLabels:
+      app: {{ application.backend_service }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ application.backend_service }}
+        azure.workload.identity/use: "true"
+
+    spec:
+      serviceAccountName: {{ azure.application_service_account }}
+
+      containers:
+        - name: applicationbib
+          image: {{ application.backend_image }}
+          imagePullPolicy: {{ deployment.image_pull_policy }}
+
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "k8s"
+
+            - name: FIREBASE_CREDENTIALS
+              value: "/mnt/secrets-store/firebase.json"
+
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: applicationbib-runtime-secrets
+                  key: POSTGRES_URL
+
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: applicationbib-runtime-secrets
+                  key: POSTGRES_USER
+
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: applicationbib-runtime-secrets
+                  key: POSTGRES_PASSWORD
+
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "384Mi"
+              ephemeral-storage: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "768Mi"
+              ephemeral-storage: "512Mi"
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: applicationbib-azure-secrets

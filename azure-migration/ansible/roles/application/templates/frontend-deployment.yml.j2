@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ application.frontend_service }}
+  namespace: {{ azure.application_namespace }}
+  labels:
+    app: {{ application.frontend_service }}
+
+spec:
+  replicas: {{ deployment.replicas.frontend }}
+
+  selector:
+    matchLabels:
+      app: {{ application.frontend_service }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ application.frontend_service }}
+
+    spec:
+      containers:
+        - name: ritual-growth-ui
+          image: {{ application.frontend_image }}
+          imagePullPolicy: {{ deployment.image_pull_policy }}
+
+          ports:
+            - containerPort: 3000
+              protocol: TCP
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+              ephemeral-storage: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+              ephemeral-storage: "256Mi"
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}

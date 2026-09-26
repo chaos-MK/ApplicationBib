@@ -1,0 +1,39 @@
+---
+# ApplicationBib Azure migration — application deployment.
+# Static deployment artifact; not executed against Minikube.
+
+- name: Create ApplicationBib workload identity service account
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ azure.application_namespace }}"
+    template: application-serviceaccount.yml.j2
+
+- name: Create ApplicationBib Key Vault SecretProviderClass
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ azure.application_namespace }}"
+    template: application-secretproviderclass.yml.j2
+
+- name: Deploy ApplicationBib backend
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ azure.application_namespace }}"
+    template: backend-deployment.yml.j2
+
+- name: Deploy ApplicationBib backend service
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ azure.application_namespace }}"
+    template: backend-service.yml.j2
+
+- name: Deploy Ritual Growth frontend
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ azure.application_namespace }}"
+    template: frontend-deployment.yml.j2
+
+- name: Deploy Ritual Growth frontend service
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ azure.application_namespace }}"
+    template: frontend-service.yml.j2
