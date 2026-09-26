@@ -1,0 +1,9 @@
+---
+# ApplicationBib Azure migration — ingress configuration.
+# Static deployment artifact; not executed against Minikube.
+
+- name: Deploy ApplicationBib ingress
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ azure.application_namespace }}"
+    template: application-ingress.yml.j2
